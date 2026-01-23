@@ -168,7 +168,7 @@ const handleCreateEssay = async () => {
   }
   try {
     await axios.post(
-      'http://127.0.0.1:8081/createEssay',
+      '/createEssay',
       { title: newTitle.value.trim() },
       { headers: { 'Content-Type': 'application/json' } }
     )
@@ -197,7 +197,7 @@ const changePage = delta => {
 const fetchMyEssayList = async (targetPage = 1) => {
   try {
     const res = await axios.post(
-      'http://127.0.0.1:8081/queryEssay',
+      '/queryEssay',
       { pageNum: targetPage, pageSize: pageSize.value }, // 修复：使用传入的分页参数
       { headers: { 'Content-Type': 'application/json' } }
     )
@@ -221,7 +221,7 @@ const fetchEssayDetail = async (essay) => {
 
   try {
     const res = await axios.post(
-      'http://127.0.0.1:8081/getEssayContent',
+      '/getEssayContent',
       { storagePath: essay.storagePath },
       {
         headers: { 'Content-Type': 'application/json' },
@@ -439,7 +439,7 @@ const toggleEditMode = () => {
 const saveEssayContent = async () => {
   try {
     const res = await axios.post(
-      'http://127.0.0.1:8081/saveEssayContent',
+      '/saveEssayContent',
       {
         id: currentEssay.value.id,
         storagePath: currentEssay.value.storagePath,
@@ -468,7 +468,7 @@ const handlePublish = async () => {
   try {
     // 模拟调用发布接口，传入文章id和发布状态
     const res = await axios.post(
-      'http://127.0.0.1:8081/publishEssay',
+      '/publishEssay',
       { id: currentEssay.value.id, status: 1 }, // status=1 标记为已发布
       { headers: { 'Content-Type': 'application/json' } }
     )
@@ -499,7 +499,7 @@ const handleDelete = async () => {
 
     // 调用后台删除接口
     const res = await axios.post(
-      'http://127.0.0.1:8081/deleteEssay',
+      '/deleteEssay',
       { id: currentEssay.value.id },
       { headers: { 'Content-Type': 'application/json' } }
     )
@@ -744,5 +744,139 @@ const handleDelete = async () => {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 15px;
+}
+/* ========== 移动端适配（768px以下） ========== */
+@media (max-width: 768px) {
+  /* 整体容器改为上下布局，高度自适应 */
+  .create-space-container {
+    flex-direction: column;
+    height: auto;
+    padding: 10px;
+    gap: 15px;
+  }
+
+  /* 左侧侧边栏占满宽度，高度自适应 */
+  .left-sidebar {
+    width: 100%;
+    height: auto;
+    padding: 15px;
+    max-height: 40vh; /* 限制侧边栏高度，避免占满屏幕 */
+  }
+
+  .left-sidebar h2 {
+    font-size: 1.2rem;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+  }
+
+  .essay-item {
+    padding: 10px 12px;
+    font-size: 0.9rem;
+  }
+
+  .no-data {
+    padding: 15px;
+    font-size: 0.9rem;
+  }
+
+  /* 右侧内容区适配 */
+  .right-content {
+    padding: 15px;
+    min-height: 50vh; /* 保证内容区最小高度 */
+  }
+
+  .content-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 15px;
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+  }
+
+  /* 标题输入框适配宽度 */
+  .title-input {
+    width: 100%;
+    font-size: 1.2rem;
+  }
+
+  .content-header h3 {
+    font-size: 1.2rem;
+  }
+
+  /* 操作按钮换行，适配移动端 */
+  .operation-btns {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .operation-btns el-button {
+    flex: 1;
+    min-width: 80px;
+    font-size: 0.8rem;
+    padding: 8px 0;
+  }
+
+  /* 编辑器/预览区适配 */
+  .editor-container {
+    min-height: 200px;
+  }
+
+  #editor-toolbar {
+    padding: 5px 8px;
+    min-height: 35px;
+  }
+
+  #editor-content {
+    padding: 15px;
+    min-height: 150px;
+  }
+
+  .content-body {
+    padding: 15px;
+  }
+
+  .essay-content {
+    font-size: 0.9rem;
+    line-height: 1.6;
+  }
+
+  .empty-tip {
+    font-size: 1rem;
+  }
+
+  /* 分页栏字体缩小 */
+  .total {
+    font-size: 12px;
+  }
+
+  .pagination-btns el-button {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+  }
+
+  /* 新建文章弹窗宽度适配 */
+  :deep(.el-dialog) {
+    width: 90% !important;
+    padding: 0 10px;
+  }
+
+  :deep(.el-dialog__header) {
+    padding: 15px 10px;
+  }
+
+  :deep(.el-dialog__body) {
+    padding: 10px;
+  }
+
+  :deep(.el-dialog__footer) {
+    padding: 10px;
+  }
+  :deep(.w-e-toolbar) {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 5px;
+  }
 }
 </style>

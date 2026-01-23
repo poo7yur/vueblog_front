@@ -1,35 +1,35 @@
 <template>
   <div id="app" class="blog-container">
-    <!-- 博客头部（新增头像下拉菜单） -->
+    <!-- 博客头部 -->
     <header class="blog-header">
       <div class="header-left">
         <h1>我的个人博客</h1>
-        <p class="header-desc">学无止境分享有限</p>
+        <p class="header-desc">学无止境 分享有限</p>
       </div>
       <div class="header-right">
-        <!-- Element Plus下拉菜单：头像+动态菜单 -->
+        <!-- 头像下拉菜单 -->
         <el-dropdown trigger="hover" placement="bottom">
           <div class="avatar-wrapper">
-            <img src="@/assets/head.png" alt="个人头像" class="avatar" />
-
+            <!-- 动态头像显示 -->
+            <img :src="avatarUrl || require('@/assets/head.png')" alt="个人头像" class="avatar" />
           </div>
           <template #dropdown>
             <el-dropdown-menu>
-              <!-- 未登录状态显示 -->
+              <!-- 未登录状态 -->
               <template v-if="!isLoggedIn">
                 <el-dropdown-item @click="handleLogin">登录</el-dropdown-item>
                 <el-dropdown-item @click="handleRegister">注册</el-dropdown-item>
                 <el-dropdown-item divided @click="handleMessages">消息</el-dropdown-item>
               </template>
-              <!-- 已登录状态显示 -->
+              <!-- 已登录状态 -->
               <template v-else>
                 <el-dropdown-item disabled>{{ currentUser }}</el-dropdown-item>
                 <el-dropdown-item divided @click="handleMessages">我的消息</el-dropdown-item>
+                <el-dropdown-item divided @click="triggerAvatarUpload">
+                  <span>更改头像</span>
+                </el-dropdown-item>
                 <el-dropdown-item @click="handleLogout">
                   <span style="color: #f56c6c;">退出登录</span>
-                </el-dropdown-item>
-                <el-dropdown-item divided @click="handleAvatar">
-                  <span style="color: green;">更改头像</span>
                 </el-dropdown-item>
               </template>
             </el-dropdown-menu>
@@ -38,7 +38,14 @@
       </div>
     </header>
 
-    <!-- 中间模块内容保持不变... -->
+    <!-- 隐藏的文件输入框 -->
+    <input
+      type="file"
+      ref="avatarInput"
+      accept="image/*"
+      style="display: none"
+      @change="handleAvatarChange"
+    />
     <main class="blog-main">
       <div class="module-container">
         <div class="module-item create-space">
@@ -50,7 +57,7 @@
               <h3 class="article-title">{{ article.title }}</h3>
               <div class="article-meta">
                 <span>分类：{{ article.category }}</span>
-                <span>更新时间：{{ formatDate(article.updateTime) }}</span>
+                <span>作者：{{ article.createUser }}</span>
               </div>
               <p class="article-summary">{{ article.summary }}</p>
             </div>
@@ -78,14 +85,14 @@
         <h3>{{ currentArticle.title }}</h3>
         <div class="dialog-meta">
           <span>分类：{{ currentArticle.category }}</span>
-          <span>更新时间：{{ formatDate(currentArticle.updateTime) }}</span>
+          <span>作者：{{ currentArticle.createUser }}</span>
         </div>
         <hr />
         <p class="dialog-summary">{{ currentArticle.summary }}</p>
       </div>
     </el-dialog>
 
-    <!-- 登录弹窗（保持不变） -->
+    <!-- 登录弹窗 -->
     <el-dialog v-model="loginDialogVisible" title="用户登录" width="420px" center
       :close-on-click-modal="false" :before-close="cancelLogin" class="login-dialog">
       <div class="login-type-switch">
@@ -233,6 +240,10 @@ const codeCountdown = ref(0);
 const canGetCode = ref(false);
 let countdownTimer = null;
 
+// 新增：头像相关
+const avatarUrl = ref("");
+const avatarInput = ref(null);
+
 // 新增：登录状态管理
 const isLoggedIn = ref(false);
 const currentUser = ref("");
@@ -255,9 +266,15 @@ const messagesLoading = ref(false);
 onMounted(() => {
   const token = localStorage.getItem('userToken');
   const user = localStorage.getItem('currentUser');
+  const savedAvatarUrl = localStorage.getItem('userAvatarUrl');
+  
   if (token && user) {
     isLoggedIn.value = true;
     currentUser.value = user;
+    // 如果有保存的头像URL，使用它
+    if (savedAvatarUrl) {
+      avatarUrl.value = savedAvatarUrl;
+    }
   }
   fetchEssayList();
 });
@@ -274,11 +291,11 @@ onUnmounted(() => {
   if (countdownTimer) clearInterval(countdownTimer);
 });
 
-// 原有函数保持不变...
+// 原有函数
 const fetchEssayList = async () => {
   try {
     const res = await axios.post(
-      "http://127.0.0.1:8081/queryEssay",
+      "/queryEssay",
       { pageNum: 1, pageSize: 3 },
       { headers: { "Content-Type": "application/json" } },
     );
@@ -297,13 +314,7 @@ const openArticleDialog = (article) => {
   articleDialogVisible.value = true;
 };
 
-const formatDate = (dateStr) => {
-  if (!dateStr) return "";
-  const date = new Date(dateStr);
-  return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-};
-
-// 登录相关函数（保持原有逻辑）
+// 登录相关函数
 const handleLogin = () => {
   loginForm.value = { account: "", password: "", smsCode: "" };
   accountError.value = "";
@@ -338,6 +349,7 @@ const validateAccount = () => {
       return false;
     }
   }
+  canGetCode.value = loginType.value === "phone" && /^1\d{10}$/.test(account.trim());
   return true;
 };
 
@@ -373,7 +385,7 @@ const getSmsCode = async () => {
   if (!validateAccount()) return;
   try {
     const res = await axios.post(
-      "http://127.0.0.1:8081/sendNotice",
+      "/sendNotice",
       { phone: loginForm.value.account.trim() },
       { headers: { "Content-Type": "application/json" } }
     );
@@ -405,16 +417,23 @@ const submitLogin = async () => {
       ? { username: loginForm.value.account.trim(), password: loginForm.value.password.trim() }
       : { phone: loginForm.value.account.trim(), smsCode: loginForm.value.smsCode.trim() };
 
-    const res = await axios.post("http://127.0.0.1:8081/login", requestData,
+    const res = await axios.post("/login", requestData,
       { headers: { "Content-Type": "application/json" } }
     );
 
     if (res.data.code === 0) {
-      // 登录成功：存储token和用户名
+      // 登录成功：存储token和用户信息
       localStorage.setItem("userToken", res.data.data.token);
-      localStorage.setItem("currentUser", res.data.data.userName || loginForm.value.account);
+      localStorage.setItem("currentUser", res.data.data.name || loginForm.value.account);
+      
+      // 保存头像URL（如果有）
+      if (res.data.data.headPicUrl) {
+        localStorage.setItem("userAvatarUrl", res.data.data.headPicUrl);
+        avatarUrl.value = res.data.data.headPicUrl;
+      }
+      
       isLoggedIn.value = true;
-      currentUser.value = res.data.data.userName || loginForm.value.account;
+      currentUser.value = res.data.data.name || loginForm.value.account;
       loginDialogVisible.value = false;
       ElMessage.success("登录成功！");
     } else {
@@ -427,7 +446,7 @@ const submitLogin = async () => {
   }
 };
 
-// 新增：注册函数
+// 注册函数
 const handleRegister = () => {
   registerForm.value = { name: "", password: "", phone: "", email: "" };
   registerDialogVisible.value = true;
@@ -438,7 +457,6 @@ const cancelRegister = () => {
 };
 
 const submitRegister = async () => {
-  // 表单验证
   if (!registerForm.value.name || !registerForm.value.password || !registerForm.value.phone || !registerForm.value.email) {
     ElMessage.error("请填写完整信息");
     return;
@@ -464,7 +482,7 @@ const submitRegister = async () => {
   registerLoading.value = true;
   try {
     const res = await axios.post(
-      "http://127.0.0.1:8081/addUser",
+      "/addUser",
       {
         name: registerForm.value.name,
         email: registerForm.value.email,
@@ -477,7 +495,6 @@ const submitRegister = async () => {
     if (res.data.code === 0) {
       ElMessage.success(res.data.msg || "注册成功");
       registerDialogVisible.value = false;
-      // 注册成功后自动打开登录窗口
       handleLogin();
     } else {
       ElMessage.error(`注册失败：${res.data.msg || "请检查输入信息"}`);
@@ -489,27 +506,82 @@ const submitRegister = async () => {
   }
 };
 
-// 头像修改功能
-const handleAvatar = () => {
+// 头像上传相关函数
+const triggerAvatarUpload = () => {
+  avatarInput.value?.click();
+};
 
+const handleAvatarChange = async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
 
-}
+  // 验证文件类型
+  if (!file.type.startsWith('image/')) {
+    ElMessage.error('请选择图片文件');
+    return;
+  }
 
-// 新增：退出登录
+  // 验证文件大小 (5MB)
+  if (file.size > 600 * 1024 ) {
+    ElMessage.error('图片大小不能超过600kb');
+    return;
+  }
+
+  const token = localStorage.getItem('userToken');
+  if (!token) {
+    ElMessage.error('请先登录');
+    return;
+  }
+
+  // 创建FormData上传文件
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    const res = await axios.post(
+      "/changeAvatar",
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          'token': token
+        }
+      }
+    );
+
+    if (res.data.code === 0) {
+      // 更新头像URL
+      const newAvatarUrl = res.data.data;
+      localStorage.setItem('userAvatarUrl', newAvatarUrl);
+      avatarUrl.value = newAvatarUrl;
+      ElMessage.success('头像更新成功');
+      
+      // 清空input，允许重复选择同一文件
+      event.target.value = '';
+    } else {
+      ElMessage.error(`头像更新失败：${res.data.msg || '系统异常'}`);
+    }
+  } catch (err) {
+    ElMessage.error(`头像更新异常：${err.message || '请检查网络连接'}`);
+  }
+};
+
+// 退出登录
 const handleLogout = () => {
   localStorage.removeItem("userToken");
   localStorage.removeItem("currentUser");
+  localStorage.removeItem("userAvatarUrl"); // 清除头像URL
   isLoggedIn.value = false;
   currentUser.value = "";
+  avatarUrl.value = ""; // 恢复默认头像
   ElMessage.success("退出登录成功");
-  // 刷新页面
   window.location.reload();
 };
 
-// 新增：消息处理
+// 消息处理
 const handleMessages = async () => {
   if (!isLoggedIn.value) {
-    ElMessage.warning("请登录后查看信息");
+    ElMessage.warning("请登录后查看消息");
     return;
   }
   messagesDialogVisible.value = true;
@@ -521,7 +593,7 @@ const fetchMessages = async () => {
   try {
     const token = localStorage.getItem("userToken");
     const res = await axios.post(
-      "http://127.0.0.1:8081/getMsg",
+      "/getMsg",
       {
         keyword: "",
         pageNum: messagePageNum.value,
@@ -568,8 +640,7 @@ const toLibrary = () => ElMessage.info("图书馆功能开发中");
 </script>
 
 <style scoped>
-/* 保持你原有的所有样式，仅添加以下新样式 */
-
+/* 保持原有样式不变 */
 .username {
   margin-left: 8px;
   font-size: 14px;
@@ -603,7 +674,7 @@ const toLibrary = () => ElMessage.info("图书馆功能开发中");
   margin-top: 20px;
 }
 
-/* 保持你原有的所有其他样式不变... */
+/* 保持原有所有样式 */
 .blog-container { max-width: 1200px; margin: 0 auto; padding: 0 20px; font-family: "Microsoft YaHei", sans-serif; color: #333; }
 .blog-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 0; border-bottom: 1px solid #eee; }
 .header-left { text-align: left; }
@@ -611,7 +682,7 @@ const toLibrary = () => ElMessage.info("图书馆功能开发中");
 .header-desc { font-size: 1.2rem; color: #7f8c8d; }
 .header-right { margin-right: 20px; }
 .avatar-wrapper { cursor: pointer; display: flex; align-items: center; }
-.avatar { width: 40px; height: 40px; border-radius: 50%; border: 2px solid #eee; }
+.avatar { width: 40px; height: 40px; border-radius: 50%; border: 2px solid #eee; object-fit: cover; }
 .module-container { display: flex; justify-content: space-between; flex-wrap: wrap; padding: 40px 0; gap: 20px; }
 .module-item { flex: 1; min-width: 300px; padding: 30px; background-color: #f9f9f9; border-radius: 8px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); position: relative; }
 .create-space .enter-btn { position: absolute; top: 33px; right: 20px; background-color: #3498db; border: none; }
@@ -644,4 +715,193 @@ const toLibrary = () => ElMessage.info("图书馆功能开发中");
 .login-btn { width: 100%; height: 44px; font-size: 16px; border-radius: 4px; }
 .dialog-footer { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 0; }
 .dialog-footer .el-button { flex: 1; margin: 0 5px; height: 44px; }
+/* 移动端适配 - 平板/大屏手机 (max-width: 768px) */
+@media (max-width: 768px) {
+  .blog-container {
+    max-width: 100%;
+    padding: 0 10px;
+  }
+
+  /* 头部适配 */
+  .blog-header {
+    padding: 15px 0;
+  }
+  .blog-header h1 {
+    font-size: 1.8rem;
+    margin-bottom: 10px;
+  }
+  .header-desc {
+    font-size: 1rem;
+  }
+  .header-right {
+    margin-right: 0;
+  }
+  .avatar {
+    width: 36px;
+    height: 36px;
+  }
+
+  /* 模块容器适配 */
+  .module-container {
+    flex-direction: column;
+    padding: 20px 0;
+    gap: 15px;
+  }
+  .module-item {
+    min-width: 100%;
+    padding: 20px 15px;
+  }
+  .module-title {
+    font-size: 1.5rem;
+    margin-bottom: 15px;
+  }
+  .create-space .enter-btn,
+  .subscribe-link .enter-btn,
+  .library .enter-btn {
+    top: 20px;
+    right: 15px;
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  /* 文章列表适配 */
+  .article-list {
+    margin-top: 25px;
+  }
+  .article-item {
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+  }
+  .article-title {
+    font-size: 1.2rem;
+  }
+  .article-meta {
+    font-size: 0.8rem;
+    gap: 15px;
+  }
+  .article-summary {
+    font-size: 0.9rem;
+  }
+
+  /* 弹窗适配 */
+  .el-dialog {
+    width: 90% !important;
+    margin: 0 auto;
+  }
+  .dialog-summary {
+    font-size: 0.9rem;
+    line-height: 1.6;
+  }
+
+  /* 登录/注册弹窗适配 */
+  .login-dialog, .register-dialog {
+    width: 90% !important;
+  }
+  .form-item {
+    margin-bottom: 12px;
+  }
+  .code-btn {
+    width: 100px;
+    font-size: 11px;
+  }
+  .dialog-footer .el-button {
+    height: 40px;
+    font-size: 14px;
+  }
+
+  /* 消息列表适配 */
+  .el-table {
+    font-size: 12px;
+  }
+  .el-table-column {
+    padding: 0 5px;
+  }
+  .el-table-column--label {
+    padding: 8px 5px;
+  }
+}
+
+/* 移动端适配 - 小屏手机 (max-width: 480px) */
+@media (max-width: 480px) {
+  /* 头部进一步适配 */
+  .blog-header {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .header-left {
+    width: 100%;
+    text-align: center;
+    margin-bottom: 10px;
+  }
+  .blog-header h1 {
+    font-size: 1.5rem;
+  }
+  .header-desc {
+    font-size: 0.9rem;
+  }
+  .header-right {
+    margin: 0 auto;
+  }
+
+  /* 模块按钮适配 */
+  .create-space .enter-btn,
+  .subscribe-link .enter-btn,
+  .library .enter-btn {
+    position: static;
+    display: block;
+    width: 100%;
+    margin-top: 15px;
+    text-align: center;
+  }
+
+  /* 登录/注册表单适配 */
+  .input-with-btn {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .code-btn {
+    width: 100%;
+    height: 36px;
+  }
+  .login-btn {
+    height: 40px;
+    font-size: 14px;
+  }
+
+  /* 消息列表表格适配（横向滚动） */
+  .el-table {
+    overflow-x: auto;
+    display: block;
+  }
+  .el-table__body-wrapper {
+    overflow-x: auto;
+  }
+  .pagination-btns {
+    gap: 5px;
+  }
+  .pagination-btns span {
+    margin: 0 8px;
+    font-size: 12px;
+  }
+
+  /* 页脚适配 */
+  .blog-footer {
+    padding: 20px 0;
+    font-size: 0.8rem;
+  }
+}
+
+/* 解决Element Plus弹窗在移动端的滚动问题 */
+.el-dialog__body {
+  max-height: 70vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 移动端点击元素去除高亮 */
+* {
+  -webkit-tap-highlight-color: transparent;
+  tap-highlight-color: transparent;
+}
+
 </style>
