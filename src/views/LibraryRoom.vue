@@ -1,0 +1,1319 @@
+<template>
+  <div class="library-room" :class="['theme-' + currentTheme]">
+  <nav class="icon-bar">
+    <div class="icon-group">
+      <button 
+        class="icon-btn" 
+        :class="{ active: activePanel === 'toc' }"
+        @click="togglePanel('toc')"
+        title="目录"
+      >
+        <svg viewBox="0 0 24 24" width="20" height="20">
+          <path fill="currentColor" d="M3 3h18v2H3V3m0 4h18v2H3V7m0 4h18v2H3v-2m0 4h18v2H3v-2m0 4h18v2H3v-2z"/>
+        </svg>
+      </button>
+      
+      <button 
+        class="icon-btn" 
+        :class="{ active: activePanel === 'settings' }"
+        @click="togglePanel('settings')"
+        title="排版设置"
+      >
+        <svg viewBox="0 0 24 24" width="20" height="20">
+          <path fill="currentColor" d="M12 15.5A3.5 3.5 0 0 1 8.5 12 3.5 3.5 0 0 1 12 8.5a3.5 3.5 0 0 1 3.5 3.5 3.5 3.5 0 0 1-3.5 3.5m7.43-2.53c.04-.32.07-.64.07-.97 0-.33-.03-.66-.07-1l2.11-1.63c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65A.488.488 0 0 0 14 2h-4c-.25 0-.46.18-.5.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.63c-.04.34-.07.67-.07 1 0 .33.03.66.07.97l-2.11 1.63c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1.01c.52.4 1.08.73 1.69.98l.38 2.65c.04.24.25.42.5.42h4c.25 0 .46-.18.5-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1.01c.22.08.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.63z"/>
+        </svg>
+      </button>
+      
+      <button 
+        class="icon-btn" 
+        :class="{ active: activePanel === 'theme' }"
+        @click="togglePanel('theme')"
+        title="主题"
+      >
+        <svg viewBox="0 0 24 24" width="20" height="20">
+          <path fill="currentColor" d="M12 2a10 10 0 0 0 0 20 1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1 4 4 0 0 1 0-8 1 1 0 0 0 1-1V3a1 1 0 0 0-1-1z"/>
+        </svg>
+      </button>
+    </div>
+    
+    <div class="icon-group bottom">
+      <button class="icon-btn" @click="toggleFullscreen" title="全屏">
+        <svg viewBox="0 0 24 24" width="20" height="20">
+          <path fill="currentColor" d="M5 5h5v2H7v3H5V5m9 0h5v5h-2V7h-3V5m3 9h2v5h-5v-2h3v-3m-7 3v2H5v-5h2v3h3z"/>
+        </svg>
+      </button>
+    </div>
+  </nav>
+
+    <!-- 中间栏：可展开的目录/设置/主题 -->
+    <aside class="drawer-panel" :class="{ 
+      'is-open': activePanel !== null,
+      'mobile-open': isMobile && activePanel !== null 
+    }">
+      <!-- 目录面板 -->
+      <div v-if="activePanel === 'toc'" class="panel-content">
+        <div class="panel-header">
+          <h3>目录</h3>
+          <button class="close-btn" @click="closePanel">×</button>
+        </div>
+        <div class="toc-list" ref="tocRef">
+          <div 
+            v-for="(item, index) in tocItems" 
+            :key="index"
+            class="toc-item"
+            :class="{ active: currentChapter === item.chapter }"
+            :style="{ paddingLeft: item.level * 1 + 'rem' }"
+            @click="jumpToChapter(item)"
+          >
+            {{ item.title }}
+          </div>
+        </div>
+      </div>
+
+      <!-- 排版设置面板 -->
+      <div v-if="activePanel === 'settings'" class="panel-content">
+        <div class="panel-header">
+          <h3>排版</h3>
+          <button class="close-btn" @click="closePanel">×</button>
+        </div>
+        
+        <div class="settings-body">
+          <div class="setting-block">
+            <label>字体</label>
+            <div class="font-options">
+              <button 
+                v-for="font in fontOptions" 
+                :key="font.value"
+                class="font-btn"
+                :class="{ active: settings.fontFamily === font.value }"
+                :style="{ fontFamily: font.value }"
+                @click="setFont(font.value)"
+              >
+                {{ font.label }}
+              </button>
+            </div>
+          </div>
+
+          <div class="setting-block">
+            <label>字号</label>
+            <div class="size-slider">
+              <span class="size-small">A</span>
+              <input 
+                type="range" 
+                v-model.number="settings.fontSize" 
+                min="12" 
+                max="24" 
+                step="1"
+                @input="saveSettings"
+              />
+              <span class="size-large">A</span>
+            </div>
+            <div class="size-value">{{ settings.fontSize }}px</div>
+          </div>
+
+          <div class="setting-block">
+            <label>行高</label>
+            <div class="line-height-options">
+              <button 
+                v-for="lh in lineHeightOptions" 
+                :key="lh"
+                class="lh-btn"
+                :class="{ active: settings.lineHeight === lh }"
+                @click="setLineHeight(lh)"
+              >
+                <div class="lh-preview" :style="{ lineHeight: lh }">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <div class="setting-block">
+            <label>边距</label>
+            <div class="margin-options">
+              <button 
+                v-for="margin in marginOptions" 
+                :key="margin.value"
+                class="margin-btn"
+                :class="{ active: settings.margin === margin.value }"
+                @click="setMargin(margin.value)"
+              >
+                <div class="margin-preview" :style="{ padding: margin.preview }">
+                  <div></div>
+                </div>
+                <span>{{ margin.label }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 主题面板 -->
+      <div v-if="activePanel === 'theme'" class="panel-content">
+        <div class="panel-header">
+          <h3>主题</h3>
+          <button class="close-btn" @click="closePanel">×</button>
+        </div>
+        
+        <div class="theme-grid">
+          <div 
+            v-for="theme in themes" 
+            :key="theme.name"
+            class="theme-card"
+            :class="{ active: currentTheme === theme.name }"
+            @click="setTheme(theme)"
+          >
+            <div class="theme-preview" :style="{ background: theme.colors.bg, color: theme.colors.text }">
+              <span>Aa</span>
+            </div>
+            <span class="theme-name">{{ theme.label }}</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 右侧主阅读区 -->
+    <main class="reader-main">
+      <!-- 顶部工具栏 -->
+      <header class="reader-toolbar" v-if="currentBook">
+        <div class="toolbar-left">
+          <button class="tool-btn" @click="prevChapter" :disabled="currentChapter <= 1">
+            <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+          </button>
+          <span class="chapter-indicator">{{ currentChapter }} / {{ totalChapters }}</span>
+          <button class="tool-btn" @click="nextChapter" :disabled="currentChapter >= totalChapters">
+            <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+          </button>
+        </div>
+        
+        <div class="toolbar-center">
+          <h1 class="book-title">{{ formatBookName(currentBook) }}</h1>
+        </div>
+
+        <div class="toolbar-right">
+          <span class="progress-text">{{ readingProgress }}%</span>
+        </div>
+      </header>
+
+      <!-- 书籍内容区 -->
+      <div class="reader-content-wrapper" ref="readerWrapper">
+        <div v-if="!currentBook" class="empty-state">
+          <div class="empty-icon">📚</div>
+          <h2>选择一本书开始阅读</h2>
+          <p>点击左侧目录图标浏览书库</p>
+        </div>
+
+        <div v-else class="reader-scroll-area" ref="scrollArea" @scroll="handleScroll">
+          <article class="reading-article" :style="articleStyles">
+              <!-- 章节加载中提示 -->
+            <div v-if="chapterLoading" class="chapter-loading">
+              章节加载中...
+            </div>
+            <div class="chapter-title" v-if="currentChapterTitle">
+              <h2>{{ currentChapterTitle }}</h2>
+            </div>
+            
+            <div class="chapter-body" v-html="currentContent" ref="chapterBody"></div>
+
+            <div class="chapter-footer">
+              <div class="page-divider">
+                <span>第 {{ currentChapter }} 章结束</span>
+              </div>
+              <div class="next-chapter-prompt" v-if="currentChapter < totalChapters">
+                <button @click="nextChapter" class="next-btn">
+                  下一章：{{ nextChapterTitle }}
+                  <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                </button>
+              </div>
+            </div>
+          </article>
+        </div>
+      </div>
+
+      <!-- 底部进度条 -->
+      <div class="reading-progress-bar" v-if="currentBook">
+        <div class="progress-fill" :style="{ width: readingProgress + '%' }"></div>
+      </div>
+    </main>
+
+    <!-- 移动端遮罩 -->
+    <div 
+      class="mobile-overlay" 
+      v-if="isMobile && activePanel !== null"
+      @click="closePanel"
+    ></div>
+
+    <!-- 快速导航（右下角） -->
+    <div class="quick-nav" v-if="currentBook">
+      <button class="quick-btn" @click="scrollToTop" title="回到顶部">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"/></svg>
+      </button>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ElMessage} from 'element-plus'
+import axios from 'axios'
+
+// 响应式状态
+const isMobile = ref(false)
+const activePanel = ref(null) // 'toc', 'settings', 'theme'
+
+// 书籍数据
+const books = ref([])
+const currentBook = ref(null)
+const currentPage = ref(1)
+const pageSize = ref(20)
+const totalBooks = ref(0)
+const loading = ref(false)
+
+// 阅读状态
+const currentContent = ref('')
+const currentChapter = ref(1)
+const totalChapters = ref(1)
+const currentChapterTitle = ref('')
+const nextChapterTitle = ref('') 
+const readingProgress = ref(0)
+const tocItems = ref([])
+const chapterLoading = ref(false)
+
+// 阅读设置
+const settings = ref({
+  fontFamily: "'Noto Serif SC', serif",
+  fontSize: 18,
+  lineHeight: 1.8,
+  margin: 'normal' // narrow, normal, wide
+})
+
+const fontOptions = [
+  { label: '宋体', value: "'Noto Serif SC', serif" },
+  { label: '黑体', value: "'Noto Sans SC', sans-serif" },
+  { label: '楷体', value: "'LXGW WenKai', serif" },
+  { label: '系统', value: "system-ui, -apple-system, sans-serif" }
+]
+
+const lineHeightOptions = [1.4, 1.6, 1.8, 2.0, 2.2]
+
+const marginOptions = [
+  { label: '窄', value: 'narrow', preview: '1rem' },
+  { label: '中', value: 'normal', preview: '2rem' },
+  { label: '宽', value: 'wide', preview: '4rem' }
+]
+
+// 主题配置
+const themes = [
+  {
+    name: 'light',
+    label: '白昼',
+    colors: { bg: '#ffffff', text: '#2c3e50', sidebar: '#f5f5f5' }
+  },
+  {
+    name: 'sepia',
+    label: ' sepia',
+    colors: { bg: '#f4ecd8', text: '#433422', sidebar: '#e9dfc8' }
+  },
+  {
+    name: 'dark',
+    label: '暗夜',
+    colors: { bg: '#1a1a1a', text: '#d1d5db', sidebar: '#2d2d2d' }
+  },
+  {
+    name: 'green',
+    label: '护眼',
+    colors: { bg: '#c7edcc', text: '#2c3e50', sidebar: '#b8e0bd' }
+  },
+  {
+    name: 'blue',
+    label: '海蓝',
+    colors: { bg: '#e3f2fd', text: '#1565c0', sidebar: '#bbdefb' }
+  }
+]
+
+const currentTheme = ref('light')
+
+// 计算样式
+const articleStyles = computed(() => {
+  const theme = themes.find(t => t.name === currentTheme.value)
+  const marginMap = { narrow: '4%', normal: '8%', wide: '15%' }
+  
+  return {
+    fontFamily: settings.value.fontFamily,
+    fontSize: settings.value.fontSize + 'px',
+    lineHeight: settings.value.lineHeight,
+    paddingLeft: marginMap[settings.value.margin] || '8%',
+    paddingRight: marginMap[settings.value.margin] || '8%',
+    backgroundColor: 'transparent',
+    color: theme?.colors.text || '#2c3e50',
+    maxWidth: settings.value.margin === 'wide' ? '720px' : 'none'
+  }
+})
+
+// 检测移动端
+const checkMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+  if (isMobile.value) {
+    activePanel.value = null
+  }
+}
+
+// 面板控制
+const togglePanel = (panel) => {
+  if (activePanel.value === panel) {
+    activePanel.value = null
+  } else {
+    activePanel.value = panel
+    if (panel === 'toc' && tocItems.value.length === 0) {
+      loadToc()
+    }
+  }
+}
+
+const closePanel = () => {
+  activePanel.value = null
+}
+
+// 获取书籍列表
+const fetchBooks = async (page = 1) => {
+  if (loading.value) return
+  loading.value = true
+  
+  try {
+    const response = await axios.post('/listBooks', {
+      pageNo: page,
+      pageSize: pageSize.value
+    })
+    
+    if (response.data.code === 0) {
+      const processedImages = response.data.data.urls.map(path => 
+        path.replace(/\\/g, '/')
+      )
+      
+      if (page === 1) {
+        books.value = processedImages
+      } else {
+        books.value.push(...processedImages)
+      }
+      totalBooks.value = response.data.data.total
+      currentPage.value = response.data.data.pageNo
+      
+      tocItems.value = processedImages.map((book, index) => ({
+        title: formatBookName(book),
+        chapter: index + 1,
+        level: 0,
+        path: book
+      }))
+    }
+  } catch (error) {
+    console.error('获取书籍列表失败:', error)
+    const mockBooks = [
+      'C:/Users/Admin/Documents/books/有毒的逻辑：为何有说服力的话反而不可信.epub'
+    ]
+    books.value = mockBooks
+    totalBooks.value = mockBooks.length
+    tocItems.value = mockBooks.map((book, index) => ({
+      title: formatBookName(book),
+      chapter: index + 1,
+      level: 0,
+      path: book
+    }))
+  } finally {
+    loading.value = false
+  }
+}
+
+// 选择书籍
+const selectBook = async (bookPath) => {
+  currentBook.value = bookPath
+  currentChapter.value = 1
+  await loadChapter(1) 
+  if (isMobile.value) {
+    closePanel()
+  }
+}
+
+// 加载章节
+const loadChapter = async (chapterNum) => {
+  // 无书籍路径时直接返回，避免无效请求
+  if (!currentBook.value) return
+  try {
+    chapterLoading.value = true // 开启章节加载状态
+    // 调用Java加载章节接口，入参：书籍路径+章节号
+    const res = await axios.post('/loadChapter', {
+      bookPath: currentBook.value, // 选中的书籍完整路径（兼容Windows/Linux）
+      chapterNum: chapterNum       // 要加载的章节号
+    })
+
+    if (res.data.code === 0) {
+      // 解构接口返回的章节数据
+       const {  chapterTitle, content, totalChapters: total, nextChapterTitle: nextTitle  // 重命名，避免与 nextChapterTitle ref 冲突
+      } = res.data.data
+
+      currentContent.value = content        
+      currentChapter.value = chapterNum     
+      currentChapterTitle.value = chapterTitle
+      nextChapterTitle.value = nextTitle || '已是最后一章' // 使用重命名后的变量
+      totalChapters.value = total
+
+      // 原有逻辑：章节加载后滚动到顶部
+      nextTick(() => {
+        const scrollArea = document.querySelector('.reader-scroll-area')
+        if (scrollArea) scrollArea.scrollTop = 0
+      })
+    } else {
+      // 接口返回失败（如章节不存在），给出错误提示
+      ElMessage.error(`加载章节失败：${res.data.msg}`)
+   
+    }
+  } catch (e) {
+    // 网络异常/接口报错，统一捕获
+    ElMessage.error(`章节接口请求失败：${e.message}`)
+  } finally {
+    chapterLoading.value = false // 关闭章节加载状态
+  }
+}
+
+// 目录跳转
+const jumpToChapter = (item) => {
+  if (item.path && item.path !== currentBook.value) {
+    selectBook(item.path)
+  } else {
+    loadChapter(item.chapter)
+  }
+  closePanel()
+}
+
+const loadToc = () => {
+  // 实际应用中这里应该解析EPUB的目录
+  if (tocItems.value.length === 0) {
+    fetchBooks(1)
+  }
+}
+
+// 阅读导航
+const prevChapter = () => {
+  if (currentChapter.value > 1) {
+    loadChapter(currentChapter.value - 1)
+  }
+}
+
+const nextChapter = () => {
+  if (currentChapter.value < totalChapters.value) {
+    loadChapter(currentChapter.value + 1)
+  }
+}
+
+// 滚动处理
+const handleScroll = (e) => {
+  const { scrollTop, scrollHeight, clientHeight } = e.target
+  readingProgress.value = Math.round((scrollTop / (scrollHeight - clientHeight)) * 100) || 0
+  
+  // 接近底部自动加载下一章
+  if (scrollHeight - scrollTop - clientHeight < 100 && !loading.value) {
+    // 可以实现连续滚动加载
+  }
+}
+
+const scrollToTop = () => {
+  const scrollArea = document.querySelector('.reader-scroll-area')
+  if (scrollArea) {
+    scrollArea.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+}
+
+// 设置调整
+const setFont = (font) => {
+  settings.value.fontFamily = font
+  saveSettings()
+}
+
+const setLineHeight = (lh) => {
+  settings.value.lineHeight = lh
+  saveSettings()
+}
+
+const setMargin = (margin) => {
+  settings.value.margin = margin
+  saveSettings()
+}
+
+const setTheme = (theme) => {
+  currentTheme.value = theme.name
+  // 应用CSS变量
+  const root = document.documentElement
+  root.style.setProperty('--reader-bg', theme.colors.bg)
+  root.style.setProperty('--reader-text', theme.colors.text)
+  root.style.setProperty('--sidebar-bg', theme.colors.sidebar)
+  saveSettings()
+}
+
+const saveSettings = () => {
+  localStorage.setItem('flowReaderSettings', JSON.stringify({
+    ...settings.value,
+    theme: currentTheme.value
+  }))
+}
+
+const loadSettings = () => {
+  const saved = localStorage.getItem('flowReaderSettings')
+  if (saved) {
+    const parsed = JSON.parse(saved)
+    Object.assign(settings.value, parsed)
+    currentTheme.value = parsed.theme || 'light'
+    setTheme(themes.find(t => t.name === currentTheme.value) || themes[0])
+  }
+}
+
+// 全屏
+const toggleFullscreen = () => {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen()
+  } else {
+    document.exitFullscreen()
+  }
+}
+
+// 工具函数
+const formatBookName = (path) => {
+  if (!path) return ''
+  const normalizedPath = path.replace(/\\/g, '/')
+  const filename = normalizedPath.split('/').pop()
+  return filename.replace(/\.epub$/i, '').replace(/\s*\([^)]*Library\)\s*$/i, '')
+}
+
+// 生命周期
+onMounted(() => {
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+  loadSettings()
+  fetchBooks(1)
+  
+  // 键盘快捷键
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft') prevChapter()
+    if (e.key === 'ArrowRight') nextChapter()
+    if (e.key === 'Escape') closePanel()
+  })
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile)
+})
+</script>
+
+<style>
+/* CSS变量 */
+:root {
+  --icon-bar-width: 48px;
+  --drawer-width: 280px;
+  --reader-bg: #ffffff;
+  --reader-text: #2c3e50;
+  --sidebar-bg: #f5f5f5;
+  --border-color: #e0e0e0;
+  --accent-color: #4f46e5;
+  --hover-bg: rgba(0, 0, 0, 0.05);
+}
+
+/* 基础布局 */
+.library-room {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--reader-bg);
+  color: var(--reader-text);
+}
+
+/* 极左图标栏 */
+.icon-bar {
+  width: var(--icon-bar-width);
+  min-width: var(--icon-bar-width);
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.5rem 0;
+  z-index: 30;
+}
+
+.icon-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  width: 100%;
+  align-items: center;
+}
+
+.icon-group.bottom {
+  margin-top: auto;
+}
+
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  transition: all 0.2s;
+}
+
+.icon-btn:hover {
+  background: var(--hover-bg);
+  color: var(--accent-color);
+}
+
+.icon-btn.active {
+  background: var(--accent-color);
+  color: white;
+}
+
+/* 中间抽屉面板 */
+.drawer-panel {
+  width: 0;
+  min-width: 0;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border-color);
+  overflow: hidden;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+}
+
+.drawer-panel.is-open {
+  width: var(--drawer-width);
+  min-width: var(--drawer-width);
+}
+
+.panel-content {
+  width: var(--drawer-width);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.drawer-panel.is-open .panel-content {
+  opacity: 1;
+  transition-delay: 0.1s;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.panel-header h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.close-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1.25rem;
+  line-height: 1;
+  color: #666;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-btn:hover {
+  background: var(--hover-bg);
+}
+
+/* 目录列表 */
+.toc-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem;
+}
+
+.toc-item {
+  padding: 0.625rem 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--reader-text);
+  transition: all 0.15s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.toc-item:hover {
+  background: var(--hover-bg);
+}
+
+.toc-item.active {
+  background: var(--accent-color);
+  color: white;
+}
+
+/* 设置面板 */
+.settings-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+.setting-block {
+  margin-bottom: 1.5rem;
+}
+
+.setting-block label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 0.75rem;
+  color: #666;
+}
+
+/* 字体选项 */
+.font-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.font-btn {
+  padding: 0.625rem;
+  border: 1px solid var(--border-color);
+  background: var(--reader-bg);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9375rem;
+  transition: all 0.2s;
+}
+
+.font-btn.active {
+  border-color: var(--accent-color);
+  background: rgba(79, 70, 229, 0.1);
+  color: var(--accent-color);
+}
+
+/* 字号滑块 */
+.size-slider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.size-small { font-size: 0.875rem; }
+.size-large { font-size: 1.125rem; }
+
+.size-slider input[type="range"] {
+  flex: 1;
+  height: 4px;
+  -webkit-appearance: none;
+  background: var(--border-color);
+  border-radius: 2px;
+  outline: none;
+}
+
+.size-slider input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  background: var(--accent-color);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.size-value {
+  text-align: center;
+  font-size: 0.875rem;
+  color: #666;
+}
+
+/* 行高选项 */
+.line-height-options {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.lh-btn {
+  flex: 1;
+  height: 48px;
+  border: 1px solid var(--border-color);
+  background: var(--reader-bg);
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lh-btn.active {
+  border-color: var(--accent-color);
+}
+
+.lh-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 24px;
+}
+
+.lh-preview span {
+  height: 2px;
+  background: currentColor;
+  border-radius: 1px;
+}
+
+/* 边距选项 */
+.margin-options {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.margin-btn {
+  flex: 1;
+  border: 1px solid var(--border-color);
+  background: var(--reader-bg);
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 0.75rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: #666;
+}
+
+.margin-btn.active {
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+}
+
+.margin-preview {
+  width: 32px;
+  height: 24px;
+  border: 1px solid currentColor;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.margin-preview div {
+  width: 60%;
+  height: 4px;
+  background: currentColor;
+  border-radius: 2px;
+}
+
+/* 主题网格 */
+.theme-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.theme-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.theme-preview {
+  width: 100%;
+  aspect-ratio: 4/3;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: 600;
+  border: 2px solid transparent;
+  transition: all 0.2s;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.theme-card.active .theme-preview {
+  border-color: var(--accent-color);
+  transform: scale(1.05);
+}
+
+.theme-name {
+  font-size: 0.875rem;
+  color: #666;
+}
+
+/* 主阅读区 */
+.reader-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--reader-bg);
+  position: relative;
+  overflow: hidden;
+}
+
+/* 顶部工具栏 */
+.reader-toolbar {
+  height: 56px;
+  min-height: 56px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.5rem;
+  background: var(--reader-bg);
+}
+
+.toolbar-left, .toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 100px;
+}
+
+.tool-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+}
+
+.tool-btn:hover:not(:disabled) {
+  background: var(--hover-bg);
+  color: var(--reader-text);
+}
+
+.tool-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.chapter-indicator {
+  font-size: 0.875rem;
+  color: #666;
+  font-variant-numeric: tabular-nums;
+}
+
+.toolbar-center {
+  flex: 1;
+  text-align: center;
+  overflow: hidden;
+}
+
+.book-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--reader-text);
+}
+
+.progress-text {
+  font-size: 0.875rem;
+  color: #666;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 阅读内容区 */
+.reader-content-wrapper {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.reader-scroll-area {
+  height: 100%;
+  overflow-y: auto;
+  padding: 2rem 0;
+}
+
+.reading-article {
+  max-width: 720px;
+  margin: 0 auto;
+  padding-bottom: 4rem;
+}
+
+.chapter-title {
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.chapter-title h2 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 0;
+}
+
+.chapter-body {
+  line-height: 1.8;
+}
+
+.chapter-body p {
+  margin-bottom: 1.5em;
+  text-align: justify;
+  text-indent: 2em;
+}
+
+/* 章节底部 */
+.chapter-footer {
+  margin-top: 4rem;
+  padding-top: 2rem;
+}
+
+.page-divider {
+  text-align: center;
+  position: relative;
+  margin-bottom: 2rem;
+}
+
+.page-divider::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--border-color);
+}
+
+.page-divider span {
+  position: relative;
+  background: var(--reader-bg);
+  padding: 0 1rem;
+  font-size: 0.875rem;
+  color: #999;
+}
+
+.next-chapter-prompt {
+  text-align: center;
+}
+
+.next-btn {
+  padding: 0.875rem 1.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--sidebar-bg);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9375rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--reader-text);
+  transition: all 0.2s;
+}
+
+.next-btn:hover {
+  border-color: var(--accent-color);
+  background: rgba(79, 70, 229, 0.05);
+}
+
+/* 进度条 */
+.reading-progress-bar {
+  height: 2px;
+  background: var(--border-color);
+  position: relative;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--accent-color);
+  transition: width 0.1s;
+}
+
+/* 快速导航 */
+.quick-nav {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  z-index: 20;
+}
+
+.quick-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  background: var(--reader-bg);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  transition: all 0.2s;
+}
+
+.quick-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+}
+
+/* 空状态 */
+.empty-state {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #999;
+  text-align: center;
+  padding: 2rem;
+}
+
+.empty-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.empty-state h2 {
+  font-size: 1.25rem;
+  color: var(--reader-text);
+  margin-bottom: 0.5rem;
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  :root {
+    --drawer-width: 80vw;
+  }
+  
+  .icon-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: 56px;
+    flex-direction: row;
+    justify-content: space-around;
+    border-right: none;
+    border-top: 1px solid var(--border-color);
+    padding: 0.5rem;
+    background: var(--reader-bg);
+  }
+  
+  .icon-group {
+    flex-direction: row;
+  }
+  
+  .icon-group.bottom {
+    display: none;
+  }
+  
+  .drawer-panel {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 56px;
+    z-index: 40;
+    transform: translateX(-100%);
+    width: var(--drawer-width);
+    transition: transform 0.3s ease;
+  }
+  
+  .drawer-panel.mobile-open {
+    transform: translateX(0);
+  }
+  
+  .panel-content {
+    opacity: 1;
+  }
+  
+  .reader-main {
+    padding-bottom: 56px;
+  }
+  
+  .mobile-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 35;
+  }
+  
+  .reading-article {
+    padding: 0 1rem;
+  }
+  
+  .quick-nav {
+    bottom: 5rem;
+    right: 1rem;
+  }
+}
+
+/* 滚动条美化 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* 主题特定样式 */
+.theme-dark .icon-btn,
+.theme-dark .tool-btn,
+.theme-dark .close-btn {
+  color: #9ca3af;
+}
+
+.theme-dark .toc-item,
+.theme-dark .book-title {
+  color: #d1d5db;
+}
+
+.theme-sepia {
+  --reader-bg: #f4ecd8;
+  --reader-text: #433422;
+  --sidebar-bg: #e9dfc8;
+  --border-color: #d3c6a8;
+}
+
+.theme-green {
+  --reader-bg: #c7edcc;
+  --reader-text: #2c3e50;
+  --sidebar-bg: #b8e0bd;
+  --border-color: #a8d5ae;
+}
+</style>

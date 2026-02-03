@@ -2,6 +2,9 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue' // 首页
 import CreateSpace from '../views/CreateSpace.vue' // 创作空间详情页
+import SubscribeLink from '../views/SubscribeLink.vue' // 订阅链接页
+import LibraryRoom from '../views/LibraryRoom.vue'
+import UserInfo from '../views/UserInfo.vue' 
 
 const routes = [
   {
@@ -13,7 +16,25 @@ const routes = [
     path: '/CreateSpace',
     name: 'CreateSpace',
     component: CreateSpace,
-    meta: { requiresAuth: true } // 标记该页面需要登录才能访问
+    meta: { requiresAuth: true } 
+  },
+  {
+    path: '/SubscribeLink',
+    name: 'SubscribeLink',
+    component: SubscribeLink,
+    meta: { requiresAuth: true } 
+  },
+  {
+    path: '/LibraryRoom',
+    name: 'LibraryRoom',
+    component: LibraryRoom,
+    meta: { requiresAuth: true } 
+  },
+  {
+    path: '/UserInfo',
+    name: 'UserInfo',
+    component: UserInfo,
+    meta: { requiresAuth: true } 
   }
 ]
 

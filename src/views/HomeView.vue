@@ -4,7 +4,7 @@
     <header class="blog-header">
       <div class="header-left">
         <h1>我的个人博客</h1>
-        <p class="header-desc">学无止境 分享有限</p>
+        <p class="header-desc">此刻星辰为你而闪耀</p>
       </div>
       <div class="header-right">
         <!-- 头像下拉菜单 -->
@@ -23,7 +23,7 @@
               </template>
               <!-- 已登录状态 -->
               <template v-else>
-                <el-dropdown-item disabled>{{ currentUser }}</el-dropdown-item>
+                <el-dropdown-item @click="toUserInfo" style="cursor: pointer;">{{ currentUser }}</el-dropdown-item>
                 <el-dropdown-item divided @click="handleMessages">我的消息</el-dropdown-item>
                 <el-dropdown-item divided @click="triggerAvatarUpload">
                   <span>更改头像</span>
@@ -67,6 +67,18 @@
         <div class="module-item subscribe-link">
           <h2 class="module-title">订阅链接</h2>
           <el-button class="enter-btn" @click="toSubscribeLink">进入</el-button>
+           <div class="link-list" v-if="linkList.length > 0">
+            <div class="link-item" v-for="link in linkList" :key="link.id"
+              @click="openArticleDialog(link)">
+              <h3 class="link-title">{{ link.title }}</h3>
+              <div class="link-meta">
+                <span>分类：{{ link.category }}</span>
+                <span>作者：{{ link.createUser }}</span>
+              </div>
+              <p class="link-summary">{{ link.summary }}</p>
+            </div>
+          </div>
+          <div class="no-data" v-else>暂无订阅数据</div>
         </div>
         <div class="module-item library">
           <h2 class="module-title">图书馆</h2>
@@ -225,6 +237,7 @@ const router = useRouter();
 
 // 原有数据
 const articleList = ref([]);
+const linkList = ref([]);
 const articleDialogVisible = ref(false);
 const currentArticle = ref(null);
 
@@ -277,6 +290,7 @@ onMounted(() => {
     }
   }
   fetchEssayList();
+  fetchLinkList();
 });
 
 // 监听验证码倒计时
@@ -291,7 +305,6 @@ onUnmounted(() => {
   if (countdownTimer) clearInterval(countdownTimer);
 });
 
-// 原有函数
 const fetchEssayList = async () => {
   try {
     const res = await axios.post(
@@ -303,6 +316,23 @@ const fetchEssayList = async () => {
       articleList.value = res.data.data.list;
     } else {
       ElMessage.error("获取文章列表失败：" + res.data.msg);
+    }
+  } catch (err) {
+    ElMessage.error("接口请求异常：" + err.message);
+  }
+};
+
+const fetchLinkList = async () => {
+  try {
+    const res = await axios.post(
+      "/queryEssay",
+      { pageNum: 1, pageSize: 3 , type: 1},
+      { headers: { "Content-Type": "application/json" } },
+    );
+    if (res.data.code === 0) {
+      linkList.value = res.data.data.list;
+    } else {
+      ElMessage.error("获取订阅链接失败：" + res.data.msg);
     }
   } catch (err) {
     ElMessage.error("接口请求异常：" + err.message);
@@ -634,9 +664,10 @@ const resetMessages = () => {
 };
 
 // 其他跳转函数
+const toUserInfo = () => router.push("/UserInfo");
 const toCreateSpace = () => router.push("/CreateSpace");
-const toSubscribeLink = () => ElMessage.info("订阅链接功能开发中");
-const toLibrary = () => ElMessage.info("图书馆功能开发中");
+const toSubscribeLink = () => router.push("/SubscribeLink");
+const toLibrary = () => router.push("/LibraryRoom");
 </script>
 
 <style scoped>
@@ -695,6 +726,12 @@ const toLibrary = () => ElMessage.info("图书馆功能开发中");
 .article-title { font-size: 1.4rem; color: #2c3e50; margin-bottom: 10px; }
 .article-meta { font-size: 0.9rem; color: #95a5a6; margin-bottom: 15px; display: flex; gap: 20px; }
 .article-summary { font-size: 1rem; line-height: 1.6; color: #555; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.link-list { margin-top: 40px; }
+.link-item { margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px dashed #eee; cursor: pointer; transition: all 0.3s; }
+.link-item:hover { transform: translateY(-5px); box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08); }
+.link-title { font-size: 1.4rem; color: #2c3e50; margin-bottom: 10px; }
+.link-meta { font-size: 0.9rem; color: #95a5a6; margin-bottom: 15px; display: flex; gap: 20px; }
+.link-summary { font-size: 1rem; line-height: 1.6; color: #555; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .no-data { text-align: center; padding: 20px; color: #95a5a6; font-size: 1rem; }
 .dialog-article { text-align: left; }
 .dialog-meta { font-size: 0.9rem; color: #95a5a6; margin: 10px 0; display: flex; gap: 20px; }

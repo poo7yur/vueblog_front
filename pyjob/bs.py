@@ -2,11 +2,12 @@ import urllib.parse
 import requests
 import sys
 import os
+import io
 from bs4 import BeautifulSoup
 
-# 定义生成文件的根目录（根据实际需求修改，需确保Java应用有读写权限）
+# 定义生成文件的根目录
 OUTPUT_DIR = "/usr/app/html/"
-
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 def fetch_html(url: str) -> str:
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36'
@@ -44,12 +45,17 @@ def extract_clean_content(html: str) -> str:
             break
     
     if not article:
-        print("⚠️ 未识别到正文容器，使用<body>全部内容", file=sys.stderr)
         article = soup.body or soup
     
     # 删除噪音元素
     for tag in article.select('script, style, iframe, nav, header, footer, aside, .ad, .advertisement, .share-bar'):
         tag.decompose()
+
+    title_tag = soup.find('h1', id='article-title')
+    if title_tag:
+       print(title_tag.get_text())
+    else:
+      print("未找到文章标题")
     
     return str(article)
 
@@ -72,7 +78,7 @@ def save_as_html(content: str, task_id: str, original_url: str):
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>保存文章</title>
     <style>
-        body {{ font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; line-height: 1.7; max-width: 800px; margin: 0 auto; padding: 20px; color: #333; }}
+        body {{ font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; line-height: 1.7; margin: 0 auto; padding: 20px; color: #333; }}
         img {{ max-width: 100%; height: auto; }}
         a {{ color: #0066cc; text-decoration: none; }}
         .article-info {{ color: #999; font-size: 0.9em; margin-bottom: 20px; }}
@@ -91,9 +97,7 @@ def save_as_html(content: str, task_id: str, original_url: str):
     try:
         with open(output_file, 'w', encoding='utf-8') as f:
             f.write(full_html)
-        print(f"✅ 已保存为 {output_file}")
     except Exception as e:
-        print(f"保存文件失败: {e}", file=sys.stderr)
         sys.exit(1)
 
 if __name__ == '__main__':
@@ -111,13 +115,9 @@ if __name__ == '__main__':
         print("❌ URL格式错误！必须以http://或https://开头", file=sys.stderr)
         sys.exit(1)
     
-    print(f"🔗 任务ID: {task_id} | 目标URL: {original_url}")
-    
-    print("📡 正在抓取内容...")
+
     html = fetch_html(original_url)
     
-    print("🧹 正在清洗内容...")
     clean_content = extract_clean_content(html)
     
-    print("💾 正在保存...")
     save_as_html(clean_content, task_id, original_url)
