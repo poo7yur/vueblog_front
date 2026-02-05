@@ -466,6 +466,8 @@ const submitLogin = async () => {
       currentUser.value = res.data.data.name || loginForm.value.account;
       loginDialogVisible.value = false;
       ElMessage.success("登录成功！");
+      //刷新页面
+      window.location.reload();
     } else {
       ElMessage.error(`登录失败：${res.data.msg || "验证信息错误"}`);
     }

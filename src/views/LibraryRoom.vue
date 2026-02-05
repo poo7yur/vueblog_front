@@ -54,7 +54,7 @@
       <div v-if="activePanel === 'toc'" class="panel-content">
         <div class="panel-header">
           <h3>目录</h3>
-          <button class="close-btn" @click="closePanel">×</button>
+          <el-button type="primary" circle size="small" @click="showUploadDialog = true">+</el-button>
         </div>
         <div class="toc-list" ref="tocRef">
           <div 
@@ -65,7 +65,16 @@
             :style="{ paddingLeft: item.level * 1 + 'rem' }"
             @click="jumpToChapter(item)"
           >
-            {{ item.title }}
+            <span class="toc-title">{{ item.title }}</span>
+            <!-- 非Public路径显示删除按钮 -->
+            <button 
+              v-if="!isPublicPath(item.path)" 
+              class="toc-delete-btn"
+              @click.stop="confirmDeleteBook(item)"
+              title="删除书籍"
+            >
+              ×
+            </button>
           </div>
         </div>
       </div>
@@ -182,7 +191,18 @@
           <button class="tool-btn" @click="prevChapter" :disabled="currentChapter <= 1">
             <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
           </button>
-          <span class="chapter-indicator">{{ currentChapter }} / {{ totalChapters }}</span>
+          <div class="chapter-indicator">
+            <input 
+              type="number" 
+              v-model.number="currentChapterInput" 
+              :min="1" 
+              :max="totalChapters"
+              class="chapter-input"
+              @blur="handleChapterInput"
+              @keyup.enter="handleChapterInput"
+            />
+            / {{ totalChapters }}
+          </div>
           <button class="tool-btn" @click="nextChapter" :disabled="currentChapter >= totalChapters">
             <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
           </button>
@@ -219,7 +239,7 @@
 
             <div class="chapter-footer">
               <div class="page-divider">
-                <span>第 {{ currentChapter }} 章结束</span>
+                <span>第 {{ currentChapter }} 页结束</span>
               </div>
               <div class="next-chapter-prompt" v-if="currentChapter < totalChapters">
                 <button @click="nextChapter" class="next-btn">
@@ -251,12 +271,43 @@
         <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"/></svg>
       </button>
     </div>
+
+    <!-- 上传本地书籍弹窗 -->
+    <el-dialog
+      v-model="showUploadDialog"
+      title="上传本地书籍"
+      width="400px"
+      destroy-on-close
+    >
+      <div class="upload-container">
+        <el-upload
+          class="upload-demo"
+          drag
+          action="#"
+          :auto-upload="false"
+          :file-list="uploadFileList"
+          accept=".epub"
+          :on-change="handleFileChange"
+        >
+          <i class="el-icon-upload"></i>
+          <div class="el-upload__text">将EPUB文件拖到此处，或<em>点击选择</em></div>
+        </el-upload>
+        <el-button
+          type="primary"
+          class="upload-btn"
+          @click="uploadBook"
+          :disabled="!uploadFileList.length"
+        >
+          上传书籍
+        </el-button>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { ElMessage} from 'element-plus'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ElMessage, ElMessageBox, ElDialog, ElUpload, ElButton } from 'element-plus'
 import axios from 'axios'
 
 // 响应式状态
@@ -288,6 +339,13 @@ const settings = ref({
   lineHeight: 1.8,
   margin: 'normal' // narrow, normal, wide
 })
+
+// 上传相关
+const showUploadDialog = ref(false)
+const uploadFileList = ref([])
+const currentUploadFile = ref(null)
+// 接口Token（建议实际项目从登录态/本地存储获取）
+const token = ref('eyJhbGciOiJIUzI1NiJ9.eyJ1c2VyTmFtZSI6InBvbzd0ZXIiLCJ1c2VySWQiOiIxbnc5am5xcGlvYms4N2ZxcnciLCJzdWIiOiJwb283dGVyIiwiaWF0IjoxNzcwMjUyNzM1LCJleHAiOjE3NzAyNTk5MzV9.EHRDRRMTQjdd0nVb7MKoDVeUp_BMj_PumFR2ebNunfQ')
 
 const fontOptions = [
   { label: '宋体', value: "'Noto Serif SC', serif" },
@@ -372,8 +430,148 @@ const togglePanel = (panel) => {
   }
 }
 
+// 新增响应式变量
+const currentChapterInput = ref(1)
+
+// 监听 currentChapter 变化，同步到输入框
+watch(currentChapter, (newVal) => {
+  currentChapterInput.value = newVal
+}, { immediate: true })
+
+// 输入框处理函数
+const handleChapterInput = async () => {
+  const inputValue = currentChapterInput.value
+  
+  // 边界校验
+  if (!inputValue || isNaN(inputValue)) {
+    ElMessage.warning('请输入有效的章节号')
+    currentChapterInput.value = currentChapter.value // 恢复为当前值
+    return
+  }
+  
+  if (inputValue < 1) {
+    ElMessage.warning('章节号不能小于1')
+    currentChapterInput.value = currentChapter.value
+    return
+  }
+  
+  if (inputValue > totalChapters.value) {
+    ElMessage.warning(`章节号不能大于 ${totalChapters.value}`)
+    currentChapterInput.value = currentChapter.value
+    return
+  }
+  
+  // 相同值不重复加载
+  if (inputValue === currentChapter.value) return
+  
+  // 加载章节
+  try {
+    await loadChapter(inputValue)
+  } catch (e) {
+    // 加载失败，恢复输入框值
+    currentChapterInput.value = currentChapter.value
+  }
+}
+
 const closePanel = () => {
   activePanel.value = null
+}
+
+// 判断是否为Public路径
+const isPublicPath = (path) => {
+  if (!path) return false
+  // 检测路径是否包含public目录（不区分大小写）
+  return path.toLowerCase().includes('public')
+}
+
+// 处理上传文件选择
+const handleFileChange = (file) => {
+  // 只保留最新选择的一个文件
+  uploadFileList.value = [file]
+  currentUploadFile.value = file.raw
+}
+
+// 上传书籍接口调用
+const uploadBook = async () => {
+  if (!currentUploadFile.value) {
+    ElMessage.warning('请选择要上传的EPUB文件')
+    return
+  }
+
+  const formData = new FormData()
+  formData.append('file', currentUploadFile.value)
+
+  try {
+    const response = await axios.post('/uploadBook', formData, {
+      headers: {
+        'token': token.value,
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+
+    if (response.data.code === 0) {
+      ElMessage.success('书籍上传成功！')
+      showUploadDialog.value = false
+      uploadFileList.value = []
+      // 刷新书籍列表
+      fetchBooks(1)
+    } else {
+      ElMessage.error(`上传失败：${response.data.msg}`)
+    }
+  } catch (error) {
+    console.error('上传书籍失败:', error)
+    ElMessage.error(`上传失败：${error.message}`)
+  }
+}
+
+// 确认删除书籍
+const confirmDeleteBook = async (item) => {
+  try {
+    await ElMessageBox.confirm(
+      `是否确认删除《${item.title}》？`,
+      '删除确认',
+      {
+        confirmButtonText: '是',
+        cancelButtonText: '否',
+        type: 'warning'
+      }
+    )
+    await deleteBook(item.title)
+  } catch (err) {
+    ElMessage.info('已取消删除')
+  }
+}
+
+// 删除书籍接口调用
+const deleteBook = async (bookName) => {
+  try {
+    // 编码书名（处理中文/特殊字符）
+    const encodedName = encodeURIComponent(bookName)
+    const response = await axios.get(`http://127.0.0.1:8081/delBook?name=${encodedName}`, {
+      headers: {
+        'token': token.value
+      }
+    })
+
+    if (response.data.code === 0) {
+      ElMessage.success('书籍删除成功！')
+      // 刷新书籍列表
+      fetchBooks(1)
+      // 如果删除的是当前阅读的书籍，清空状态
+      if (currentBook.value && formatBookName(currentBook.value) === bookName) {
+        currentBook.value = null
+        currentContent.value = ''
+        currentChapter.value = 1
+        totalChapters.value = 1
+        readingProgress.value = 0
+      }
+    } else {
+      ElMessage.error(`删除失败：${response.data.msg}`)
+    }
+  } catch (error) {
+    console.error('删除书籍失败:', error)
+    ElMessage.error(`删除失败：${error.message}`)
+  }
 }
 
 // 获取书籍列表
@@ -746,6 +944,7 @@ onUnmounted(() => {
   padding: 0.5rem;
 }
 
+/* 目录列表项 - 新增相对定位，为删除按钮层级做铺垫 */
 .toc-item {
   padding: 0.625rem 0.75rem;
   border-radius: 6px;
@@ -757,6 +956,11 @@ onUnmounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative; /* 新增：作为删除按钮的定位参考 */
+  gap: 0.5rem; /* 新增：标题和按钮之间留固定间距，避免挤在一起 */
 }
 
 .toc-item:hover {
@@ -765,10 +969,60 @@ onUnmounted(() => {
 
 .toc-item.active {
   background: var(--accent-color);
-  color: white;
+  color: #fff; /* 建议改回白色，深色背景配白色文字更醒目，原黑色和主色冲突 */
 }
 
-/* 设置面板 */
+/* 目录项标题 - 单独抽离，确保文字溢出省略生效 */
+.toc-title {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 目录项删除按钮 - 核心调整：提高层级、优化定位、修复遮盖 */
+.toc-delete-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  color: #ff4d4f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.2s ease; /* 优化过渡流畅度 */
+  flex-shrink: 0; /* 新增：禁止按钮被挤压变形 */
+  z-index: 10; /* 核心：提高层级，避免被背景层遮盖 */
+}
+
+/* 鼠标悬浮/选中项 都显示删除按钮，保持交互一致性 */
+.toc-item:hover .toc-delete-btn,
+.toc-item.active .toc-delete-btn {
+  opacity: 1;
+}
+
+/* 按钮悬浮样式 - 优化背景，适配active状态的主色背景 */
+.toc-delete-btn:hover {
+  background: rgba(255, 77, 79, 0.2); /* 提高透明度，适配各种背景 */
+  color: #fff; /* 按钮悬浮时文字变白，更醒目 */
+}
+
+/* 适配深色主题/active状态的按钮颜色，避免视觉冲突 */
+.theme-dark .toc-delete-btn,
+.toc-item.active .toc-delete-btn {
+  color: #ff6b6b; /* 浅一点的红色，适配深色/主色背景 */
+}
+.theme-dark .toc-delete-btn:hover,
+.toc-item.active .toc-delete-btn:hover {
+  background: rgba(255, 107, 107, 0.3);
+  color: #fff;
+}
+
 .settings-body {
   flex: 1;
   overflow-y: auto;
@@ -1016,11 +1270,38 @@ onUnmounted(() => {
 }
 
 .chapter-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   font-size: 0.875rem;
   color: #666;
-  font-variant-numeric: tabular-nums;
 }
 
+.chapter-input {
+  width: 50px;
+  height: 28px;
+  text-align: center;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--reader-bg);
+  color: var(--reader-text);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.chapter-input:focus {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2);
+}
+
+/* 移除输入框的上下箭头（可选） */
+.chapter-input::-webkit-outer-spin-button,
+.chapter-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
 .toolbar-center {
   flex: 1;
   text-align: center;
@@ -1201,6 +1482,16 @@ onUnmounted(() => {
   font-size: 1.25rem;
   color: var(--reader-text);
   margin-bottom: 0.5rem;
+}
+
+/* 上传相关样式 */
+.upload-container {
+  padding: 1rem 0;
+}
+
+.upload-btn {
+  width: 100%;
+  margin-top: 1rem;
 }
 
 /* 移动端适配 */

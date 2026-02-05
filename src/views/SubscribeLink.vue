@@ -9,7 +9,7 @@
       <div class="essay-list">
         <div class="essay-item" v-for="essay in myEssayList" :key="essay.id"
           :class="{ active: currentEssay?.id === essay.id }" @click="handleEssayClick(essay)">
-          {{ essay.title }}
+          <div class="essay-title">{{ essay.title }}</div>
           <!-- 已分享标签 -->
           <span v-if="essay.isShare === 1" class="share-tag">✓</span>
         </div>
@@ -47,14 +47,26 @@
         <!-- 仅保留标题展示，移除编辑模式输入框 -->
         <div class="title-wrapper">
           <h3>{{ currentEssay.title }}</h3>
+          <!-- 右侧也展示创建者（可选） -->
+          <div class="content-creator">{{ currentEssay.createUser }}</div>
         </div>
         <div class="operation-btns">
-          <!-- 移除编辑按钮 -->
-          <el-button type="success" @click="handlePublish" :disabled="currentEssay.isShare === 1"
-            :class="{ 'disabled-btn': currentEssay.isShare === 1 }">
+          <!-- 发布按钮：禁用条件增加「非本人」判断 -->
+          <el-button 
+            type="success" 
+            @click="handlePublish" 
+            :disabled="currentEssay.isShare === 1 || currentUser !== currentEssay.createUser"
+            :class="{ 'disabled-btn': currentEssay.isShare === 1 || currentUser !== currentEssay.createUser }"
+          >
             发布
           </el-button>
-          <el-button type="danger" @click="handleDelete">
+          <!-- 删除按钮：增加「非本人」禁用判断 -->
+          <el-button 
+            type="danger" 
+            @click="handleDelete"
+            :disabled="currentUser !== currentEssay.createUser"
+            :class="{ 'disabled-btn': currentUser !== currentEssay.createUser }"
+          >
             删除
           </el-button>
         </div>
@@ -98,6 +110,8 @@ axios.interceptors.request.use(config => {
 const myEssayList = ref([]) // 我的订阅列表（pageSize=20）
 const currentEssay = ref(null) // 当前选中的订阅
 const essayContent = ref('') // 订阅原始内容
+// 新增：获取当前登录用户
+const currentUser = ref(localStorage.getItem('currentUser') || '')
 
 /* 分页相关 */
 const pageNum = ref(1)
@@ -220,6 +234,11 @@ const handlePublish = async () => {
     ElMessage.warning('已分享的订阅不可重复发布')
     return
   }
+  // 增加非本人判断（双重防护）
+  if (currentUser.value !== currentEssay.value.createUser) {
+    ElMessage.warning('非创建者不可发布')
+    return
+  }
 
   try {
     const res = await axios.post(
@@ -240,6 +259,12 @@ const handlePublish = async () => {
 
 // 删除订阅
 const handleDelete = async () => {
+  // 增加非本人判断（双重防护）
+  if (currentUser.value !== currentEssay.value.createUser) {
+    ElMessage.warning('非创建者不可删除')
+    return
+  }
+
   try {
     await ElMessageBox.confirm(
       '此操作将永久删除该订阅，是否继续？',
@@ -322,10 +347,16 @@ const handleDelete = async () => {
   cursor: pointer;
   transition: all 0.3s;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   position: relative;
 }
+
+.essay-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 4px;
+}
+
 
 .essay-item:hover {
   background-color: #e3f2fd;
@@ -340,6 +371,7 @@ const handleDelete = async () => {
 .share-tag {
   position: absolute;
   right: 10px;
+  top: 15px;
   font-size: 0.8rem;
   color: #999;
   background-color: #f5f5f5;
@@ -402,7 +434,12 @@ const handleDelete = async () => {
 .content-header h3 {
   font-size: 1.6rem;
   color: #2c3e50;
-  margin: 0;
+  margin: 0 0 8px 0;
+}
+/* 右侧创建者样式 */
+.content-creator {
+  font-size: 0.9rem;
+  color: #666;
 }
 
 .operation-btns {
