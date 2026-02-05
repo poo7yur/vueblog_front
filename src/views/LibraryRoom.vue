@@ -547,7 +547,7 @@ const deleteBook = async (bookName) => {
   try {
     // 编码书名（处理中文/特殊字符）
     const encodedName = encodeURIComponent(bookName)
-    const response = await axios.get(`http://127.0.0.1:8081/delBook?name=${encodedName}`, {
+    const response = await axios.get(`/delBook?name=${encodedName}`, {
       headers: {
         'token': token.value
       }
@@ -997,7 +997,7 @@ onUnmounted(() => {
   opacity: 0;
   transition: all 0.2s ease; /* 优化过渡流畅度 */
   flex-shrink: 0; /* 新增：禁止按钮被挤压变形 */
-  z-index: 10; /* 核心：提高层级，避免被背景层遮盖 */
+  z-index: 20; /* 核心：提高层级，避免被背景层遮盖 */
 }
 
 /* 鼠标悬浮/选中项 都显示删除按钮，保持交互一致性 */

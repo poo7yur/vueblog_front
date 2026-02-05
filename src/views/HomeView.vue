@@ -83,6 +83,18 @@
         <div class="module-item library">
           <h2 class="module-title">图书馆</h2>
           <el-button class="enter-btn" @click="toLibrary">进入</el-button>
+          <div class="book-list" v-if="bookList.length > 0">
+            <div class="book-item" v-for="book in bookList" :key="book.id">
+              <div class="book-cover">
+                <img :src="book.storagePath" :alt="book.title" />
+              </div>
+              <div class="book-info">
+                <h3 class="book-title">{{ book.title }}</h3>
+                <span class="book-author">上传者：{{ book.createUser }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="no-data" v-else>暂无图书数据</div>
         </div>
       </div>
     </main>
@@ -238,6 +250,7 @@ const router = useRouter();
 // 原有数据
 const articleList = ref([]);
 const linkList = ref([]);
+const bookList = ref([]);
 const articleDialogVisible = ref(false);
 const currentArticle = ref(null);
 
@@ -291,6 +304,7 @@ onMounted(() => {
   }
   fetchEssayList();
   fetchLinkList();
+  fetchBookList();
 });
 
 // 监听验证码倒计时
@@ -333,6 +347,23 @@ const fetchLinkList = async () => {
       linkList.value = res.data.data.list;
     } else {
       ElMessage.error("获取订阅链接失败：" + res.data.msg);
+    }
+  } catch (err) {
+    ElMessage.error("接口请求异常：" + err.message);
+  }
+};
+
+const fetchBookList = async () => {
+  try {
+    const res = await axios.post(
+      "/queryEssay",
+      { pageNum: 1, pageSize: 3, type: 2 },
+      { headers: { "Content-Type": "application/json" } },
+    );
+    if (res.data.code === 0) {
+      bookList.value = res.data.data.list;
+    } else {
+      ElMessage.error("获取图书列表失败：" + res.data.msg);
     }
   } catch (err) {
     ElMessage.error("接口请求异常：" + err.message);
@@ -941,6 +972,129 @@ const toLibrary = () => router.push("/LibraryRoom");
 * {
   -webkit-tap-highlight-color: transparent;
   tap-highlight-color: transparent;
+}
+
+/* 图书列表样式 */
+.book-list {
+  margin-top: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.book-item {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 15px;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s;
+  cursor: pointer;
+}
+
+.book-item:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.book-cover {
+  flex-shrink: 0;
+  width: 80px;
+  height: 110px;
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.book-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.book-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.book-title {
+  font-size: 1.2rem;
+  color: #2c3e50;
+  margin: 0;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.book-author {
+  font-size: 0.9rem;
+  color: #7f8c8d;
+}
+
+/* 图书馆按钮样式 */
+.library .enter-btn {
+  position: absolute;
+  top: 33px;
+  right: 20px;
+  background-color: #a8a8a4;
+  border: none;
+}
+
+.library .enter-btn:hover {
+  background-color: #a8a8a4;
+}
+
+/* 移动端适配 - 图书列表 */
+@media (max-width: 768px) {
+  .book-list {
+    margin-top: 25px;
+  }
+
+  .book-item {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .book-cover {
+    width: 60px;
+    height: 82px;
+  }
+
+  .book-title {
+    font-size: 1rem;
+  }
+
+  .book-author {
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .book-cover {
+    width: 50px;
+    height: 68px;
+  }
+
+  .book-title {
+    font-size: 0.9rem;
+  }
+
+  .book-author {
+    font-size: 0.75rem;
+  }
+
+  .library .enter-btn {
+    position: static;
+    display: block;
+    width: 100%;
+    margin-top: 15px;
+    text-align: center;
+    background-color: #a8a8a4;
+  }
 }
 
 </style>
