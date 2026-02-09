@@ -2,7 +2,7 @@ const { defineConfig } = require('@vue/cli-service')
 module.exports = defineConfig({
   devServer: {
     port: 8080, // Vue默认端口（可省略，默认就是8080）
-    open: true, // 启动后自动打开浏览器（可选）
+    open: false, // 启动后自动打开浏览器（可选）
     proxy: {
       // 匹配所有以 / 开头的请求（即所有接口请求）
       '/': {

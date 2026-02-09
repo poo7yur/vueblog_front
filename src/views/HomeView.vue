@@ -289,19 +289,36 @@ const messageTotalPage = computed(() => Math.ceil(messageTotal.value / messagePa
 const messagesLoading = ref(false);
 
 // 页面加载时检查登录状态
-onMounted(() => {
+onMounted(async () => { 
   const token = localStorage.getItem('userToken');
   const user = localStorage.getItem('currentUser');
   const savedAvatarUrl = localStorage.getItem('userAvatarUrl');
   
   if (token && user) {
-    isLoggedIn.value = true;
-    currentUser.value = user;
-    // 如果有保存的头像URL，使用它
-    if (savedAvatarUrl) {
-      avatarUrl.value = savedAvatarUrl;
+    try {
+      // await 等待接口响应
+      const res = await axios.get("/userDetail");
+      
+      if (res.data.code === 500 && res.data.msg === 'token已过期') { // 3. 注意res.data（axios响应体在data里）
+        handleLogout();
+        ElMessage.error('登录已过期，请重新登录');
+        return; 
+      }
+      
+      // token 有效，设置登录状态
+      isLoggedIn.value = true;
+      currentUser.value = user;
+      if (savedAvatarUrl) {
+        avatarUrl.value = savedAvatarUrl;
+      }
+    } catch (error) {
+      handleLogout();
+      ElMessage.error('登录已过期，请重新登录');
+      return; // 异常时也退出，不执行fetch
     }
   }
+  
+  // 只有token不存在/无效、或token有效且未过期时，才执行这些fetch
   fetchEssayList();
   fetchLinkList();
   fetchBookList();

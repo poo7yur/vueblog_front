@@ -17,7 +17,7 @@
         class="icon-btn" 
         :class="{ active: activePanel === 'settings' }"
         @click="togglePanel('settings')"
-        title="排版设置"
+        title="排版"
       >
         <svg viewBox="0 0 24 24" width="20" height="20">
           <path fill="currentColor" d="M12 15.5A3.5 3.5 0 0 1 8.5 12 3.5 3.5 0 0 1 12 8.5a3.5 3.5 0 0 1 3.5 3.5 3.5 3.5 0 0 1-3.5 3.5m7.43-2.53c.04-.32.07-.64.07-.97 0-.33-.03-.66-.07-1l2.11-1.63c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65A.488.488 0 0 0 14 2h-4c-.25 0-.46.18-.5.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.63c-.04.34-.07.67-.07 1 0 .33.03.66.07.97l-2.11 1.63c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1.01c.52.4 1.08.73 1.69.98l.38 2.65c.04.24.25.42.5.42h4c.25 0 .46-.18.5-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1.01c.22.08.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.63z"/>
@@ -231,10 +231,6 @@
             <div v-if="chapterLoading" class="chapter-loading">
               章节加载中...
             </div>
-            <div class="chapter-title" v-if="currentChapterTitle">
-              <h2>{{ currentChapterTitle }}</h2>
-            </div>
-            
             <div class="chapter-body" v-html="currentContent" ref="chapterBody"></div>
 
             <div class="chapter-footer">
@@ -1341,19 +1337,6 @@ onUnmounted(() => {
   max-width: 720px;
   margin: 0 auto;
   padding-bottom: 4rem;
-}
-
-.chapter-title {
-  margin-bottom: 2rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.chapter-title h2 {
-  font-size: 1.75rem;
-  font-weight: 700;
-  line-height: 1.3;
-  margin: 0;
 }
 
 .chapter-body {
