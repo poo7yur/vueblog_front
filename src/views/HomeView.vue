@@ -225,8 +225,8 @@
           <el-button :disabled="messagePageNum === messageTotalPage" circle @click="changeMessagePage(1)">
             <el-icon><ArrowRight /></el-icon>
           </el-button>
-        </div>
-      </div>
+          </div>
+          </div>
       <div v-else class="no-data">暂无消息数据</div>
     </el-dialog>
   </div>

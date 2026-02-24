@@ -22,6 +22,18 @@
           <el-form-item label="邮箱" prop="email">
             <el-input v-model="userForm.email" placeholder="请输入新邮箱" />
           </el-form-item>
+          <el-form-item label="空间(MB)">
+            <!-- 改为下拉框 -->
+            <el-select 
+              v-model="userForm.defaultMb" 
+              @change="handleSpaceChange"
+              placeholder="请选择空间大小"
+            >
+              <el-option label="100 MB" value="100" />
+              <el-option label="500 MB" value="500" />
+              <el-option label="1000 MB" value="1000" />
+            </el-select>
+          </el-form-item>
           <el-form-item label="注册时间">
             <el-input v-model="formatCreateTime" disabled />
           </el-form-item>
@@ -49,7 +61,6 @@
           <el-tab-pane label="黑名单" name="2">
             <template #label>
               <span>黑名单</span>
-              <!-- 修复：统一按钮样式为primary，和关注添加按钮一致 -->
               <el-button size="small" icon="Plus" type="primary" @click="openAddBlackDialog" class="block-btn">添加</el-button>
             </template>
           </el-tab-pane>
@@ -94,7 +105,7 @@
       </template>
     </el-dialog>
 
-    <!-- 新增：添加黑名单的弹窗（复用关注弹窗结构，仅修改文案） -->
+    <!-- 添加黑名单的弹窗 -->
     <el-dialog v-model="addBlackDialogVisible" title="添加黑名单" width="600px" center>
       <el-input
         v-model="searchUsername"
@@ -111,6 +122,49 @@
       <template #footer>
         <el-button @click="addBlackDialogVisible = false">取消</el-button>
         <el-button type="primary" @click="submitBlack" :loading="submitBlackLoading">确认加入黑名单</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 空间扩容支付弹窗 -->
+    <el-dialog 
+      v-model="payDialogVisible" 
+      title="空间扩容支付" 
+      width="400px" 
+      center
+      :close-on-click-modal="false"
+      :close-on-press-escape="false"
+    >
+      <div class="pay-content">
+        <p class="pay-desc">
+          您当前空间：<span class="current-space">{{ originalSpace }} MB</span><br>
+          选择空间：<span class="target-space">{{ userForm.defaultMb }} MB</span><br>
+          扩容大小：<span class="increase-space">{{ increaseSpace }} MB</span><br>
+          需支付费用：<span class="pay-amount">¥{{ payAmount }}</span>（按100MB/1元计算）
+        </p>
+        <div v-if="payQrCode" class="qr-code-container">
+          <p class="qr-tip">请扫描下方支付宝二维码完成支付：</p>
+          <img :src="payQrCode" alt="支付宝支付二维码" class="qr-code" />
+        </div>
+        <div v-else class="loading-qr" v-loading="generateQrLoading">正在生成支付二维码...</div>
+      </div>
+      <template #footer>
+        <el-button @click="cancelPay">取消</el-button>
+        <el-button 
+          type="primary" 
+          @click="generatePayQrCode" 
+          :loading="generateQrLoading"
+          v-if="!payQrCode"
+        >
+          确认支付
+        </el-button>
+        <el-button 
+          type="success" 
+          @click="checkPayResult" 
+          :loading="checkPayLoading"
+          v-if="payQrCode"
+        >
+          已完成支付，确认
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -135,7 +189,10 @@ const userForm = ref({
   createTime: "",
   password: "",
   headPicUrl: "",
+  defaultMb: "100", // 默认空间100MB
 });
+// 原始空间大小（用于计算扩容费用）
+const originalSpace = ref(100);
 const formatCreateTime = computed(() => {
   if (!userForm.value.createTime) return "";
   return new Date(userForm.value.createTime).toLocaleString();
@@ -154,22 +211,28 @@ const formRules = ref({
 });
 
 // 关注相关
-const activeState = ref("1"); // 默认显示我关注的（state=1）
+const activeState = ref("1");
 const followList = ref([]);
 const followLoading = ref(false);
 const actionLoading = ref(false);
 
 // 添加关注弹窗相关
 const addFollowDialogVisible = ref(false);
-// 新增：添加黑名单弹窗控制
 const addBlackDialogVisible = ref(false);
 const searchUsername = ref("");
 const userList = ref([]);
 const userListLoading = ref(false);
 const selectedUserIds = ref([]);
 const submitFollowLoading = ref(false);
-// 新增：拉黑提交加载状态
 const submitBlackLoading = ref(false);
+
+// 空间扩容支付相关
+const payDialogVisible = ref(false);
+const increaseSpace = ref(0); // 扩容大小
+const payAmount = ref(0); // 支付金额
+const payQrCode = ref(""); // 支付二维码
+const generateQrLoading = ref(false); // 生成二维码加载状态
+const checkPayLoading = ref(false); // 检查支付结果加载状态
 
 // 防抖搜索
 const debounceSearchUser = ref(null);
@@ -200,7 +263,10 @@ const getUserDetail = async () => {
       userForm.value = {
         ...data,
         password: "******",
+        defaultMb: data.defaultMb ? data.defaultMb.toString() : "100", // 确保是字符串类型
       };
+      // 保存原始空间大小
+      originalSpace.value = Number(data.defaultMb) || 100;
     } else {
       ElMessage.error("获取用户信息失败：" + res.data.msg);
     }
@@ -296,7 +362,6 @@ const submitFollow = async () => {
   }
   submitFollowLoading.value = true;
   try {
-    // 批量关注（可根据后端调整，若不支持批量则循环调用）
     const promises = selectedUserIds.value.map(userId =>
       axios.post("/action", {
         toUser: userId,
@@ -308,7 +373,7 @@ const submitFollow = async () => {
     if (isSuccess) {
       ElMessage.success("关注成功");
       addFollowDialogVisible.value = false;
-      getFollowList(); // 刷新关注列表
+      getFollowList();
     } else {
       ElMessage.error("部分用户关注失败");
     }
@@ -316,12 +381,11 @@ const submitFollow = async () => {
     ElMessage.error("关注操作异常：" + err.message);
   } finally {
     submitFollowLoading.value = false;
-    // 清空选中状态
     selectedUserIds.value = [];
   }
 };
 
-// 新增：8. 提交拉黑操作
+// 8. 提交拉黑操作
 const submitBlack = async () => {
   if (selectedUserIds.value.length === 0) {
     ElMessage.warning("请选择要加入黑名单的用户");
@@ -329,11 +393,10 @@ const submitBlack = async () => {
   }
   submitBlackLoading.value = true;
   try {
-    // 批量拉黑（根据后端接口调整action字段）
     const promises = selectedUserIds.value.map(userId =>
       axios.post("/action", {
         toUser: userId,
-        action: "block" // 假设后端拉黑的action值为block，需和后端确认
+        action: "block"
       })
     );
     const results = await Promise.all(promises);
@@ -341,7 +404,7 @@ const submitBlack = async () => {
     if (isSuccess) {
       ElMessage.success("加入黑名单成功");
       addBlackDialogVisible.value = false;
-      getFollowList(); // 刷新黑名单列表
+      getFollowList();
     } else {
       ElMessage.error("部分用户加入黑名单失败");
     }
@@ -349,7 +412,6 @@ const submitBlack = async () => {
     ElMessage.error("加入黑名单操作异常：" + err.message);
   } finally {
     submitBlackLoading.value = false;
-    // 清空选中状态
     selectedUserIds.value = [];
   }
 };
@@ -358,14 +420,14 @@ const submitBlack = async () => {
 const handleAction = async (userId) => {
   let action = "";
   let tip = "";
-  if (activeState.value === "1") { // 我关注的：取消关注
+  if (activeState.value === "1") {
     action = "cancelFollow";
     tip = "确定取消关注该用户吗？";
-  } else if (activeState.value === "2") { // 黑名单：取消拉黑
+  } else if (activeState.value === "2") {
     action = "unblock";
     tip = "确定取消拉黑该用户吗？";
   } else {
-    return; // 我的关注者无操作
+    return;
   }
 
   try {
@@ -381,12 +443,12 @@ const handleAction = async (userId) => {
     });
     if (res.data.code === 0) {
       ElMessage.success(activeState.value === "1" ? "取消关注成功" : "取消拉黑成功");
-      getFollowList(); // 刷新列表
+      getFollowList();
     } else {
       ElMessage.error("操作失败：" + res.data.msg);
     }
   } catch (err) {
-    if (err !== "cancel") { // 排除取消弹窗的情况
+    if (err !== "cancel") {
       ElMessage.error("操作异常：" + err.message);
     }
   } finally {
@@ -404,24 +466,99 @@ const getActionText = () => {
   return "";
 };
 
-// 新增：11. 打开关注弹窗方法（修复点击不弹窗问题）
+// 11. 打开关注弹窗方法
 const openAddFollowDialog = () => {
-  // 每次打开弹窗重置搜索和列表
   searchUsername.value = "";
   selectedUserIds.value = [];
   addFollowDialogVisible.value = true;
-  // 主动加载用户列表
   getUserList();
 };
 
-// 新增：12. 打开黑名单弹窗方法
+// 12. 打开黑名单弹窗方法
 const openAddBlackDialog = () => {
-  // 每次打开弹窗重置搜索和列表
   searchUsername.value = "";
   selectedUserIds.value = [];
   addBlackDialogVisible.value = true;
-  // 主动加载用户列表
   getUserList();
+};
+
+// 13. 处理空间大小变更
+const handleSpaceChange = () => {
+  const targetSpace = Number(userForm.value.defaultMb);
+  // 只有选中值大于当前值时才弹出支付窗口
+  if (targetSpace > originalSpace.value) {
+    // 计算扩容大小和费用（100MB/1元）
+    increaseSpace.value = targetSpace - originalSpace.value;
+    payAmount.value = increaseSpace.value / 100;
+    // 打开支付弹窗
+    payDialogVisible.value = true;
+  }
+};
+
+// 14. 生成支付二维码
+const generatePayQrCode = async () => {
+  try {
+    generateQrLoading.value = true;
+    // 调用后台接口生成支付宝支付二维码
+    const res = await axios.post("/generatePayQrCode", {
+      userId: userForm.value.userId,
+      targetSpace: userForm.value.defaultMb,
+      amount: payAmount.value
+    });
+    if (res.data.code === 0) {
+      payQrCode.value = res.data.data.qrCodeUrl; // 假设接口返回二维码URL
+      ElMessage.info("请扫描二维码完成支付");
+    } else {
+      ElMessage.error("生成支付二维码失败：" + res.data.msg);
+    }
+  } catch (err) {
+    ElMessage.error("生成二维码异常：" + err.message);
+  } finally {
+    generateQrLoading.value = false;
+  }
+};
+
+// 15. 检查支付结果并更新空间
+const checkPayResult = async () => {
+  try {
+    checkPayLoading.value = true;
+    // 调用后台接口检查支付状态
+    const res = await axios.post("/checkPayResult", {
+      userId: userForm.value.userId,
+      targetSpace: userForm.value.defaultMb
+    });
+    if (res.data.code === 0) {
+      if (res.data.msg.contains("更新完成")) {
+        // 支付成功，更新用户空间
+        ElMessage.success("支付成功，空间已扩容！");
+        // 重新加载用户信息（获取最新空间大小）
+        getUserDetail();
+        // 关闭支付弹窗
+        payDialogVisible.value = false;
+        // 重置二维码和支付状态
+        payQrCode.value = "";
+      } else {
+        ElMessage.warning("请完成支付后再试");
+      }
+    } else {
+      ElMessage.error("检查支付结果失败：" + res.data.msg);
+    }
+  } catch (err) {
+    ElMessage.error("检查支付结果异常：" + err.message);
+  } finally {
+    checkPayLoading.value = false;
+  }
+};
+
+// 16. 取消支付
+const cancelPay = () => {
+  // 取消支付时恢复原始空间选择
+  userForm.value.defaultMb = originalSpace.value.toString();
+  payDialogVisible.value = false;
+  // 重置支付相关状态
+  payQrCode.value = "";
+  increaseSpace.value = 0;
+  payAmount.value = 0;
 };
 </script>
 
@@ -471,7 +608,7 @@ const openAddBlackDialog = () => {
   border: none;
 }
 
-.add-btn, .block-btn { /* 统一添加按钮样式 */
+.add-btn, .block-btn {
   margin-left: 10px;
 }
 
@@ -505,6 +642,63 @@ const openAddBlackDialog = () => {
   color: #95a5a6;
 }
 
+/* 支付弹窗样式 */
+.pay-content {
+  text-align: center;
+  padding: 10px 0;
+}
+
+.pay-desc {
+  font-size: 14px;
+  line-height: 1.8;
+  margin-bottom: 20px;
+  text-align: left;
+}
+
+.current-space {
+  color: #666;
+}
+
+.target-space {
+  color: #3498db;
+  font-weight: bold;
+}
+
+.increase-space {
+  color: #e67e22;
+  font-weight: bold;
+}
+
+.pay-amount {
+  color: #e74c3c;
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.qr-code-container {
+  margin: 20px 0;
+}
+
+.qr-tip {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 10px;
+}
+
+.qr-code {
+  width: 200px;
+  height: 200px;
+  border: 1px solid #eee;
+  padding: 5px;
+}
+
+.loading-qr {
+  height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* 响应式适配 */
 @media (max-width: 768px) {
   .module {
@@ -518,6 +712,11 @@ const openAddBlackDialog = () => {
 
   .follow-item {
     min-width: 100%;
+  }
+
+  .qr-code {
+    width: 150px;
+    height: 150px;
   }
 }
 </style>

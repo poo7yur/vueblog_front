@@ -34,6 +34,18 @@
           <path fill="currentColor" d="M12 2a10 10 0 0 0 0 20 1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1 4 4 0 0 1 0-8 1 1 0 0 0 1-1V3a1 1 0 0 0-1-1z"/>
         </svg>
       </button>
+
+      <!-- 新增：曲库按钮 -->
+      <button 
+        class="icon-btn" 
+        :class="{ active: activePanel === 'music' }"
+        @click="togglePanel('music')"
+        title="曲库"
+      >
+        <svg viewBox="0 0 24 24" width="20" height="20">
+          <path fill="currentColor" d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6zm-2 16c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/>
+        </svg>
+      </button>
     </div>
     
     <div class="icon-group bottom">
@@ -45,7 +57,7 @@
     </div>
   </nav>
 
-    <!-- 中间栏：可展开的目录/设置/主题 -->
+    <!-- 中间栏：可展开的目录/设置/主题/曲库 -->
     <aside class="drawer-panel" :class="{ 
       'is-open': activePanel !== null,
       'mobile-open': isMobile && activePanel !== null 
@@ -181,6 +193,62 @@
           </div>
         </div>
       </div>
+
+      <!-- 新增：曲库面板 -->
+      <div v-if="activePanel === 'music'" class="panel-content">
+        <div class="panel-header">
+          <h3>曲库</h3>
+          <button class="close-btn" @click="closePanel">×</button>
+        </div>
+        
+        <div class="music-list" ref="musicRef">
+          <!-- 加载状态 -->
+          <div v-if="musicLoading" class="music-loading">加载中...</div>
+          
+          <!-- 空状态 -->
+          <div v-if="!musicLoading && songList.length === 0" class="music-empty">
+            <span>暂无音乐文件</span>
+          </div>
+          
+          <!-- 音乐列表 -->
+          <div 
+            v-for="(song, index) in songList" 
+            :key="index"
+            class="music-item"
+            :class="{ active: currentPlaySong?.path === song.path }"
+          >
+            <span class="music-title">{{ song.name }}</span>
+            <!-- 播放/暂停按钮 -->
+            <button 
+              class="music-play-btn"
+              @click.stop="toggleMusicPlay(song)"
+              title="播放/暂停"
+            >
+              <svg v-if="currentPlaySong?.path !== song.path || !isMusicPlaying" viewBox="0 0 24 24" width="16" height="16">
+                <path fill="currentColor" d="M8 5v14l11-7z"/>
+              </svg>
+              <svg v-else viewBox="0 0 24 24" width="16" height="16">
+                <path fill="currentColor" d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- 音乐播放控制条（底部固定） -->
+        <div class="music-player-bar" v-if="currentPlaySong">
+          <div class="player-info">
+            <span class="now-playing">正在播放：</span>
+            <span class="playing-name">{{ currentPlaySong.name }}</span>
+          </div>
+          <div class="player-controls">
+            <button class="player-btn" @click="stopMusicPlay" title="停止播放">
+              <svg viewBox="0 0 24 24" width="16" height="16">
+                <path fill="currentColor" d="M6 6h12v12H6z"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
     </aside>
 
     <!-- 右侧主阅读区 -->
@@ -308,7 +376,7 @@ import axios from 'axios'
 
 // 响应式状态
 const isMobile = ref(false)
-const activePanel = ref(null) // 'toc', 'settings', 'theme'
+const activePanel = ref(null) // 'toc', 'settings', 'theme', 'music'
 
 // 书籍数据
 const books = ref([])
@@ -340,8 +408,13 @@ const settings = ref({
 const showUploadDialog = ref(false)
 const uploadFileList = ref([])
 const currentUploadFile = ref(null)
-// 接口Token（建议实际项目从登录态/本地存储获取）
-const token = ref('eyJhbGciOiJIUzI1NiJ9.eyJ1c2VyTmFtZSI6InBvbzd0ZXIiLCJ1c2VySWQiOiIxbnc5am5xcGlvYms4N2ZxcnciLCJzdWIiOiJwb283dGVyIiwiaWF0IjoxNzcwMjUyNzM1LCJleHAiOjE3NzAyNTk5MzV9.EHRDRRMTQjdd0nVb7MKoDVeUp_BMj_PumFR2ebNunfQ')
+
+// 新增：音乐相关状态
+const songList = ref([]) // 音乐列表
+const musicLoading = ref(false) // 音乐加载状态
+const currentPlaySong = ref(null) // 当前播放的音乐
+const isMusicPlaying = ref(false) // 音乐播放状态
+const audioPlayer = ref(null) // 音频播放器实例
 
 const fontOptions = [
   { label: '宋体', value: "'Noto Serif SC', serif" },
@@ -423,6 +496,10 @@ const togglePanel = (panel) => {
     if (panel === 'toc' && tocItems.value.length === 0) {
       loadToc()
     }
+    // 新增：打开曲库面板时加载音乐列表
+    if (panel === 'music' && songList.value.length === 0) {
+      fetchSongList()
+    }
   }
 }
 
@@ -500,7 +577,7 @@ const uploadBook = async () => {
   try {
     const response = await axios.post('/uploadBook', formData, {
       headers: {
-        'token': token.value,
+
         'Content-Type': 'multipart/form-data'
       }
     })
@@ -545,7 +622,7 @@ const deleteBook = async (bookName) => {
     const encodedName = encodeURIComponent(bookName)
     const response = await axios.get(`/delBook?name=${encodedName}`, {
       headers: {
-        'token': token.value
+     
       }
     })
 
@@ -778,6 +855,113 @@ const formatBookName = (path) => {
   return filename.replace(/\.epub$/i, '').replace(/\s*\([^)]*Library\)\s*$/i, '')
 }
 
+// 新增：获取音乐列表
+const fetchSongList = async () => {
+  if (musicLoading.value) return
+  musicLoading.value = true
+  
+  try {
+    const response = await axios.get('/listSongs', {
+
+    })
+    
+    if (response.data.code === 0) {
+      songList.value = response.data.data || []
+    } else {
+      ElMessage.error(`获取曲库失败：${response.data.msg}`)
+    }
+  } catch (error) {
+    ElMessage.error(`获取曲库失败：${error.message}`)
+  } finally {
+    musicLoading.value = false
+  }
+}
+
+// 新增：播放/暂停音乐
+const toggleMusicPlay = async (song) => {
+  try {
+    // 【关键1】空值校验：当前播放的是目标歌曲，但实例未创建 → 直接返回（避免调用null的方法）
+    if (currentPlaySong.value?.path === song.path && !audioPlayer.value) {
+      ElMessage.warning('音频加载中，请稍候');
+      return;
+    }
+
+    // 点击当前正在播放/暂停的歌曲 → 切换状态
+    if (currentPlaySong.value?.path === song.path) {
+      if (isMusicPlaying.value) {
+        audioPlayer.value.pause(); // 实例已存在，可安全调用
+        isMusicPlaying.value = false;
+      } else {
+        audioPlayer.value.play();
+        isMusicPlaying.value = true;
+      }
+      return;
+    }
+
+    // 播放新歌曲：先停止原有音频（若有实例），避免多音频同时播放
+    if (audioPlayer.value) {
+      audioPlayer.value.pause();
+      isMusicPlaying.value = false; // 【关键2】状态同步，避免残留播放状态
+    }
+
+    // 标记当前播放歌曲，提前置为加载状态
+    currentPlaySong.value = song;
+    ElMessage.info('正在加载音频...');
+
+    // 获取音乐文件（二进制Blob）
+    const encodedPath = encodeURIComponent(song.path);
+    const response = await axios.get(`/getSong?path=${encodedPath}`, {
+
+      responseType: 'blob' // 必须指定，否则会解析为乱码
+    });
+
+    // 【关键3】销毁旧的音频URL，避免内存泄漏
+    if (audioPlayer.value) {
+      URL.revokeObjectURL(audioPlayer.value.src);
+    }
+
+    // 创建新的音频实例并赋值（确保实例初始化后再使用）
+    const audioUrl = URL.createObjectURL(response.data);
+    audioPlayer.value = new Audio(audioUrl); // 此时实例才被创建，非null
+
+    // 播放音频（实例已存在，安全调用）
+    await audioPlayer.value.play();
+    isMusicPlaying.value = true;
+
+    // 监听音乐结束 → 重置状态
+    audioPlayer.value.onended = () => {
+      isMusicPlaying.value = false;
+    };
+
+    // 监听音频加载错误 → 清空状态并提示
+    audioPlayer.value.onerror = (e) => {
+      ElMessage.error(`音频加载失败：${e.message || '未知错误'}`);
+      isMusicPlaying.value = false;
+      currentPlaySong.value = null;
+      audioPlayer.value = null; // 销毁错误实例
+    };
+
+  } catch (error) {
+    console.error('播放音乐失败:', error);
+    ElMessage.error(`播放失败：${error.message || '网络/接口异常'}`);
+    // 【关键4】异常兜底：重置所有状态，避免残留null实例
+    isMusicPlaying.value = false;
+    currentPlaySong.value = null;
+    audioPlayer.value = null;
+  }
+};
+
+// 新增：停止播放音乐
+const stopMusicPlay = () => {
+  if (audioPlayer.value) { // 仅当实例存在时执行
+    audioPlayer.value.pause();
+    audioPlayer.value.currentTime = 0; // 重置播放进度
+    URL.revokeObjectURL(audioPlayer.value.src); // 释放URL资源
+  }
+  // 强制重置状态，与实例同步
+  isMusicPlaying.value = false;
+};
+
 // 生命周期
 onMounted(() => {
   checkMobile()
@@ -794,8 +978,17 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  window.removeEventListener('resize', checkMobile)
-})
+  window.removeEventListener('resize', checkMobile);
+  // 【关键】彻底销毁音频实例和资源
+  if (audioPlayer.value) {
+    audioPlayer.value.pause();
+    URL.revokeObjectURL(audioPlayer.value.src); // 释放创建的Blob URL
+    audioPlayer.value = null; // 置空实例
+  }
+  // 重置所有音乐状态
+  isMusicPlaying.value = false;
+  currentPlaySong.value = null;
+});
 </script>
 
 <style>
@@ -1475,6 +1668,145 @@ onUnmounted(() => {
 .upload-btn {
   width: 100%;
   margin-top: 1rem;
+}
+
+/* 新增：音乐列表样式 */
+.music-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem;
+}
+
+.music-loading {
+  padding: 2rem;
+  text-align: center;
+  color: #666;
+  font-size: 0.9375rem;
+}
+
+.music-empty {
+  padding: 2rem;
+  text-align: center;
+  color: #999;
+  font-size: 0.9375rem;
+}
+
+.music-item {
+  padding: 0.625rem 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--reader-text);
+  transition: all 0.15s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.music-item:hover {
+  background: var(--hover-bg);
+}
+
+.music-item.active {
+  background: var(--accent-color);
+  color: #fff;
+}
+
+.music-title {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.music-play-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.music-item:hover .music-play-btn,
+.music-item.active .music-play-btn {
+  color: var(--accent-color);
+}
+
+.music-item.active .music-play-btn {
+  color: #fff;
+}
+
+.music-play-btn:hover {
+  background: rgba(79, 70, 229, 0.1);
+}
+
+.music-item.active .music-play-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* 新增：音乐播放控制条 */
+.music-player-bar {
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--sidebar-bg);
+}
+
+.player-info {
+  flex: 1;
+  overflow: hidden;
+}
+
+.now-playing {
+  font-size: 0.75rem;
+  color: #666;
+  margin-right: 0.25rem;
+}
+
+.playing-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.player-controls {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.player-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  transition: all 0.2s;
+}
+
+.player-btn:hover {
+  background: var(--hover-bg);
+  color: var(--accent-color);
 }
 
 /* 移动端适配 */
