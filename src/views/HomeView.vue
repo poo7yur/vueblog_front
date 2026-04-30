@@ -230,6 +230,7 @@
       <div v-else class="no-data">暂无消息数据</div>
     </el-dialog>
   </div>
+  <AiAssistant @open-login="handleLogin" style="width: 100%; max-width: 100%; display: block; box-sizing: border-box;" />
 </template>
 
 <script setup>
@@ -238,6 +239,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue';
+import AiAssistant from './AiAssistant.vue'
 
 // 全局拦截器
 axios.interceptors.request.use(config => {
@@ -502,6 +504,7 @@ const submitLogin = async () => {
     if (res.data.code === 0) {
       // 登录成功：存储token和用户信息
       localStorage.setItem("userToken", res.data.data.token);
+      localStorage.setItem("currentUserId", res.data.data.userId);
       localStorage.setItem("currentUser", res.data.data.name || loginForm.value.account);
       
       // 保存头像URL（如果有）
